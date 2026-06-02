@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -52,35 +52,18 @@ export function TripFormDialog({
 }: TripFormDialogProps) {
   const isEdit = Boolean(trip);
 
-  // Estado local del form. No usamos un form lib (react-hook-form, formik)
-  // porque el form tiene 5 campos y queremos mantener las dependencias bajas.
-  // Si el form crece, vale la pena migrar a react-hook-form + zod.
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [baseCurrency, setBaseCurrency] = useState('ARS');
-
-  // Cuando el dialog se abre con un trip existente, precargamos el form.
-  // El `useEffect` se dispara cuando cambia `trip` o `open`.
-  useEffect(() => {
-    if (open && trip) {
-      setName(trip.name);
-      setDescription(trip.description ?? '');
-      // El back devuelve fechas ISO; el input type="date" espera YYYY-MM-DD.
-      // Por suerte el ISO de un campo @db.Date ya viene en ese formato (con T... que cortamos).
-      setStartDate(trip.startDate ? trip.startDate.slice(0, 10) : '');
-      setEndDate(trip.endDate ? trip.endDate.slice(0, 10) : '');
-      setBaseCurrency(trip.baseCurrency);
-    } else if (open && !trip) {
-      // Modo create: arrancamos con form vacio (excepto la moneda default).
-      setName('');
-      setDescription('');
-      setStartDate('');
-      setEndDate('');
-      setBaseCurrency('ARS');
-    }
-  }, [open, trip]);
+  // Lazy initializers read from `trip` at mount time. The DialogContent is
+  // keyed on `trip?.id`, so it remounts whenever a different trip is passed,
+  // causing useState to re-run its initializers with the new values.
+  const [name, setName] = useState(() => trip?.name ?? '');
+  const [description, setDescription] = useState(() => trip?.description ?? '');
+  const [startDate, setStartDate] = useState(
+    () => (trip?.startDate ? trip.startDate.slice(0, 10) : ''),
+  );
+  const [endDate, setEndDate] = useState(
+    () => (trip?.endDate ? trip.endDate.slice(0, 10) : ''),
+  );
+  const [baseCurrency, setBaseCurrency] = useState(() => trip?.baseCurrency ?? 'ARS');
 
   // TanStack Query: cliente global usado para INVALIDAR cache despues del
   // submit, asi la lista de trips se refetchea automaticamente.
@@ -148,7 +131,7 @@ export function TripFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent key={trip?.id ?? 'new'} className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>{isEdit ? 'Editar viaje' : 'Nuevo viaje'}</DialogTitle>
