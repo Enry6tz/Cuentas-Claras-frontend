@@ -31,7 +31,7 @@ export default function DashboardPage() {
   const { user } = useUser();
   const [newTripOpen, setNewTripOpen] = useState(false);
 
-  const isAdmin = user?.publicMetadata?.role === 'admin';
+  const isAdmin = user?.publicMetadata?.admin === true;
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboard'],
@@ -39,11 +39,16 @@ export default function DashboardPage() {
     staleTime: 60_000,
   });
 
-  const { data: adminTrips = [], isLoading: adminLoading } = useQuery({
+  const {
+    data: adminTrips = [],
+    isLoading: adminLoading,
+    isError: adminError,
+  } = useQuery({
     queryKey: ['admin', 'trips'],
     queryFn: getAdminTrips,
     enabled: isAdmin,
     staleTime: 60_000,
+    retry: false,
   });
 
   const totalBalance = parseFloat(stats?.balanceTotal ?? '0');
@@ -265,6 +270,10 @@ export default function DashboardPage() {
           <CardContent>
             {adminLoading ? (
               <p className="text-sm text-muted-foreground">Cargando viajes...</p>
+            ) : adminError ? (
+              <p className="text-sm text-destructive">
+                Sin acceso al panel de admin. Verificá que tu token de Clerk incluya publicMetadata.
+              </p>
             ) : adminTrips.length === 0 ? (
               <p className="text-sm text-muted-foreground">No hay viajes en el sistema.</p>
             ) : (
