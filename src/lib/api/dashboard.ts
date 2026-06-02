@@ -1,5 +1,5 @@
 import api from '@/lib/axios';
-import type { ActivityItem, ApiResponse, Trip } from '@/types';
+import type { ActivityItem, ApiResponse } from '@/types';
 
 function unwrap<T>(response: { data: ApiResponse<T> }): T {
   return response.data.data;
@@ -17,7 +17,3 @@ export async function getDashboard(): Promise<DashboardData> {
   return unwrap(res);
 }
 
-export async function getAdminTrips(): Promise<Trip[]> {
-  const res = await api.get<ApiResponse<Trip[]>>('/admin/trips');
-  return unwrap(res);
-}

@@ -9,16 +9,13 @@ import {
   CreditCard,
   Plus,
   Activity,
-  Shield,
-  ExternalLink,
   DollarSign,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { TripFormDialog } from '@/components/trips/trip-form-dialog';
-import { getDashboard, getAdminTrips } from '@/lib/api/dashboard';
+import { getDashboard } from '@/lib/api/dashboard';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -31,24 +28,10 @@ export default function DashboardPage() {
   const { user } = useUser();
   const [newTripOpen, setNewTripOpen] = useState(false);
 
-  const isAdmin = user?.publicMetadata?.admin === true;
-
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: getDashboard,
     staleTime: 60_000,
-  });
-
-  const {
-    data: adminTrips = [],
-    isLoading: adminLoading,
-    isError: adminError,
-  } = useQuery({
-    queryKey: ['admin', 'trips'],
-    queryFn: getAdminTrips,
-    enabled: isAdmin,
-    staleTime: 60_000,
-    retry: false,
   });
 
   const totalBalance = parseFloat(stats?.balanceTotal ?? '0');
@@ -259,48 +242,6 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
-
-      {/* Panel admin — solo visible para admins */}
-      {isAdmin && (
-        <Card>
-          <CardHeader className="flex flex-row items-center gap-2">
-            <Shield className="h-4 w-4 text-primary" />
-            <CardTitle className="text-base">Panel de administración</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {adminLoading ? (
-              <p className="text-sm text-muted-foreground">Cargando viajes...</p>
-            ) : adminError ? (
-              <p className="text-sm text-destructive">
-                Sin acceso al panel de admin. Verificá que tu token de Clerk incluya publicMetadata.
-              </p>
-            ) : adminTrips.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No hay viajes en el sistema.</p>
-            ) : (
-              <ul className="divide-y">
-                {adminTrips.map((trip) => (
-                  <li key={trip.id} className="flex items-center justify-between py-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{trip.name}</p>
-                      <p className="text-xs text-muted-foreground">{trip.baseCurrency}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={trip.status === 'ACTIVE' ? 'default' : 'secondary'}>
-                        {trip.status === 'ACTIVE' ? 'Activo' : 'Finalizado'}
-                      </Badge>
-                      <Link href={`/trips/${trip.id}`}>
-                        <Button size="sm" variant="ghost">
-                          <ExternalLink className="h-3 w-3" />
-                        </Button>
-                      </Link>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       <TripFormDialog open={newTripOpen} onOpenChange={setNewTripOpen} />
     </div>
