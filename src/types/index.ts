@@ -62,6 +62,15 @@ export interface Trip {
   };
 }
 
+export interface ActivityItem {
+  type: 'expense' | 'payment' | 'trip';
+  description: string | null;
+  amount: string;
+  tripName: string;
+  tripId: string;
+  date: string;
+}
+
 // Todas las respuestas de la API vienen envueltas en { data: ... }
 // (lo hace el TransformInterceptor global del backend en main.ts).
 export interface ApiResponse<T> {
