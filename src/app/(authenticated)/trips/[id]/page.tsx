@@ -17,7 +17,6 @@ import {
   User as UserIcon,
   Plus,
 } from 'lucide-react';
-import { ArrowLeft, Calendar, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +39,16 @@ import { SettlementSuggestions } from '@/components/balances/settlement-suggesti
 import { ParticipantsList } from '@/components/trips/participants-list';
 import { getTrip, deleteTrip } from '@/lib/api/trips';
 import { getMe } from '@/lib/api/users';
+import type { ParticipationRole } from '@/types';
+
+const roleConfig: Record<
+  ParticipationRole,
+  { label: string; icon: typeof Crown; variant: 'default' | 'secondary' | 'outline' }
+> = {
+  CREATOR: { label: 'Creador', icon: Crown, variant: 'default' },
+  SUPERVISOR: { label: 'Supervisor', icon: Eye, variant: 'secondary' },
+  MEMBER: { label: 'Miembro', icon: UserIcon, variant: 'outline' },
+};
 
 interface TripDetailPageProps {
   params: Promise<{ id: string }>;
@@ -67,12 +76,6 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
     queryFn: getMe,
     staleTime: 5 * 60_000,
   });
-
-  const isCreator =
-    !!currentUser &&
-    trip?.participations?.some(
-      (p) => p.userId === currentUser.id && p.role === 'CREATOR',
-    );
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteTrip(id),
@@ -173,7 +176,6 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
       {/* Info cards */}
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>
@@ -211,7 +213,7 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
             Cargando participantes...
           </CardContent>
         </Card>
-      </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
@@ -369,12 +371,6 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
         participations={trip.participations ?? []}
         baseCurrency={trip.baseCurrency}
       />
-
-      )}
-
-      {isCreator && (
-        <TripFormDialog open={editOpen} onOpenChange={setEditOpen} trip={trip} />
-      )}
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-md">
