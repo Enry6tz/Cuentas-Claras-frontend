@@ -55,18 +55,15 @@ export function TripFormDialog({
 }: TripFormDialogProps) {
   const isEdit = Boolean(trip);
 
-  // Lazy initializers read from `trip` at mount time. The DialogContent is
-  // keyed on `trip?.id`, so it remounts whenever a different trip is passed,
-  // causing useState to re-run its initializers with the new values.
-  const [name, setName] = useState(() => trip?.name ?? '');
-  const [description, setDescription] = useState(() => trip?.description ?? '');
+  const [name, setName] = useState(trip?.name ?? '');
+  const [description, setDescription] = useState(trip?.description ?? '');
   const [startDate, setStartDate] = useState(
-    () => (trip?.startDate ? trip.startDate.slice(0, 10) : ''),
+    trip?.startDate ? trip.startDate.slice(0, 10) : '',
   );
   const [endDate, setEndDate] = useState(
-    () => (trip?.endDate ? trip.endDate.slice(0, 10) : ''),
+    trip?.endDate ? trip.endDate.slice(0, 10) : '',
   );
-  const [baseCurrency, setBaseCurrency] = useState(() => trip?.baseCurrency ?? 'ARS');
+  const [baseCurrency, setBaseCurrency] = useState(trip?.baseCurrency ?? 'ARS');
 
   // TanStack Query: cliente global usado para INVALIDAR cache despues del
   // submit, asi la lista de trips se refetchea automaticamente.
@@ -134,8 +131,8 @@ export function TripFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent key={trip?.id ?? 'new'} className="sm:max-w-md">
+    <Dialog key={trip?.id ?? 'new'} open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>{isEdit ? 'Editar viaje' : 'Nuevo viaje'}</DialogTitle>
