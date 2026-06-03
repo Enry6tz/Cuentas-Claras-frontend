@@ -1,5 +1,6 @@
 import { Sidebar } from '@/components/layout/sidebar';
 import { TopBar } from '@/components/layout/top-bar';
+import { UserSync } from '@/components/auth/user-sync';
 
 export default function AuthenticatedLayout({
   children,
@@ -8,6 +9,7 @@ export default function AuthenticatedLayout({
 }) {
   return (
     <div className="flex h-screen">
+      <UserSync />
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar />

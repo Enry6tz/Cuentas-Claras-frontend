@@ -1,14 +1,3 @@
-/**
- * Tipos TypeScript del dominio.
- *
- * Estos tipos describen lo que el backend devuelve. Importante: no son los
- * tipos de Prisma (esos viven en el backend). Son la "vista publica" para
- * el frontend, pensados para coincidir con el JSON serializado.
- *
- * Por ejemplo: en Prisma `createdAt` es Date, pero por JSON viaja como string
- * ISO. Por eso lo tipamos como `string` aca.
- */
-
 export interface User {
   id: string;
   clerkId: string;
@@ -19,8 +8,6 @@ export interface User {
   updatedAt: string;
 }
 
-// Subset de User cuando viene como participante (el back devuelve solo estos
-// campos por seguridad — no exponemos clerkId ni timestamps).
 export interface UserPublic {
   id: string;
   name: string;
@@ -28,18 +15,18 @@ export interface UserPublic {
   avatarUrl: string | null;
 }
 
-// Mantenemos en sync con el enum de Prisma del backend (`schema.prisma`).
 export type TripStatus = 'ACTIVE' | 'FINALIZED';
 export type ParticipationRole = 'CREATOR' | 'SUPERVISOR' | 'MEMBER';
+export type ExpenseSplitType = 'EQUAL' | 'EXACT' | 'PERCENT';
 
 export interface Participation {
   id: string;
   userId: string;
   tripId: string;
   role: ParticipationRole;
-  currentBalance: string; // Decimal de Prisma -> string en JSON.
+  currentBalance: string;
   joinedAt: string;
-  user?: UserPublic; // viene cuando el back hace `include: { user: ... }`
+  user?: UserPublic;
 }
 
 export interface Trip {
@@ -53,13 +40,74 @@ export interface Trip {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
-
-  // Relaciones que el back puede incluir segun el endpoint:
   participations?: Participation[];
   _count?: {
     participations: number;
     expenses: number;
   };
+}
+
+export interface ExpenseDetail {
+  id: string;
+  expenseId: string;
+  userId: string;
+  amountPaid: string;
+  amountOwed: string;
+  user?: UserPublic;
+}
+
+export interface Expense {
+  id: string;
+  creatorId: string;
+  tripId: string;
+  description: string | null;
+  originalAmount: string;
+  originalCurrency: string;
+  exchangeRate: string | null;
+  baseAmount: string | null;
+  splitType: ExpenseSplitType;
+  date: string;
+  category: string | null;
+  createdAt: string;
+  updatedAt: string;
+  details?: ExpenseDetail[];
+  creator?: UserPublic;
+}
+
+export interface Payment {
+  id: string;
+  debtorId: string;
+  creditorId: string;
+  tripId: string;
+  amount: string;
+  note: string | null;
+  date: string;
+  createdAt: string;
+  debtor?: UserPublic;
+  creditor?: UserPublic;
+}
+
+export interface BalanceEntry {
+  userId: string;
+  userName: string;
+  balance: string;
+}
+
+export interface SettlementSuggestion {
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  amount: string;
+}
+
+export interface ActivityItem {
+  type: 'expense' | 'payment' | 'trip';
+  description: string | null;
+  amount: string;
+  tripName: string;
+  tripId: string;
+  date: string;
 }
 
 // Todas las respuestas de la API vienen envueltas en { data: ... }
