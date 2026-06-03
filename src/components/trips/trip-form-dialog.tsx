@@ -19,6 +19,7 @@ import {
   createTrip,
   updateTrip,
   type TripPayload,
+  type UpdateTripPayload,
 } from '@/lib/api/trips';
 import type { Trip } from '@/types';
 
@@ -43,12 +44,14 @@ interface TripFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trip?: Trip; // si viene -> modo edit
+  updateFn?: (id: string, payload: UpdateTripPayload) => Promise<Trip>;
 }
 
 export function TripFormDialog({
   open,
   onOpenChange,
   trip,
+  updateFn,
 }: TripFormDialogProps) {
   const isEdit = Boolean(trip);
 
@@ -74,7 +77,8 @@ export function TripFormDialog({
   const mutation = useMutation({
     mutationFn: async (payload: TripPayload) => {
       if (isEdit && trip) {
-        return updateTrip(trip.id, payload);
+        const fn = updateFn ?? updateTrip;
+        return fn(trip.id, payload);
       }
       return createTrip(payload);
     },

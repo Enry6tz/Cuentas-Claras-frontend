@@ -17,6 +17,7 @@ import {
   User as UserIcon,
   Plus,
 } from 'lucide-react';
+import { ArrowLeft, Calendar, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -36,18 +37,13 @@ import { PaymentList } from '@/components/payments/payment-list';
 import { PaymentFormDialog } from '@/components/payments/payment-form-dialog';
 import { BalanceSummary } from '@/components/balances/balance-summary';
 import { SettlementSuggestions } from '@/components/balances/settlement-suggestions';
+import { ParticipantsList } from '@/components/trips/participants-list';
 import { getTrip, deleteTrip } from '@/lib/api/trips';
-import type { ParticipationRole } from '@/types';
+import { getMe } from '@/lib/api/users';
 
 interface TripDetailPageProps {
   params: Promise<{ id: string }>;
 }
-
-const roleConfig: Record<ParticipationRole, { label: string; icon: typeof Crown }> = {
-  CREATOR: { label: 'Creador', icon: Crown },
-  SUPERVISOR: { label: 'Supervisor', icon: Eye },
-  MEMBER: { label: 'Miembro', icon: UserIcon },
-};
 
 export default function TripDetailPage({ params }: TripDetailPageProps) {
   const { id } = use(params);
@@ -66,6 +62,18 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
     queryFn: () => getTrip(id),
   });
 
+  const { data: currentUser } = useQuery({
+    queryKey: ['users', 'me'],
+    queryFn: getMe,
+    staleTime: 5 * 60_000,
+  });
+
+  const isCreator =
+    !!currentUser &&
+    trip?.participations?.some(
+      (p) => p.userId === currentUser.id && p.role === 'CREATOR',
+    );
+
   const deleteMutation = useMutation({
     mutationFn: () => deleteTrip(id),
     onSuccess: () => {
@@ -77,7 +85,7 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data
           ?.message ?? 'No se pudo eliminar el viaje';
-      toast.error(typeof message === 'string' ? message : 'Algo salio mal');
+      toast.error(typeof message === 'string' ? message : 'Algo salió mal');
     },
   });
 
@@ -110,7 +118,7 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <p className="text-sm text-destructive">
-              No se encontro el viaje o no tenes acceso.
+              No se encontró el viaje o no tenés acceso.
             </p>
           </CardContent>
         </Card>
@@ -145,34 +153,32 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
             </Badge>
           </div>
           {trip.description && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {trip.description}
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{trip.description}</p>
           )}
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-            <Edit className="h-4 w-4" />
-            Editar
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setDeleteOpen(true)}
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="h-4 w-4" />
-            Eliminar
-          </Button>
-        </div>
+        {isCreator && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              Editar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteOpen(true)}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              Eliminar
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
+      {/* Info cards */}
+      <div className="grid gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Fechas
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Fechas</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2 text-sm text-foreground">
@@ -184,28 +190,25 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Moneda base
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Moneda base</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-foreground">
-              {trip.baseCurrency}
-            </p>
+            <p className="text-2xl font-bold text-foreground">{trip.baseCurrency}</p>
           </CardContent>
         </Card>
+      </div>
 
+      {/* Participantes — query propia, gestión completa */}
+      {currentUser ? (
+        <ParticipantsList tripId={id} currentUserId={currentUser.id} />
+      ) : (
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Participantes
-            </CardTitle>
+          <CardHeader>
+            <CardTitle className="text-base">Participantes</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2 text-2xl font-bold text-foreground">
-              <Users className="h-5 w-5 text-muted-foreground" />
-              {trip.participations?.length ?? 0}
-            </div>
+          <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+            <Users className="h-4 w-4" />
+            Cargando participantes...
           </CardContent>
         </Card>
       </div>
@@ -367,13 +370,19 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
         baseCurrency={trip.baseCurrency}
       />
 
+      )}
+
+      {isCreator && (
+        <TripFormDialog open={editOpen} onOpenChange={setEditOpen} trip={trip} />
+      )}
+
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Eliminar viaje</DialogTitle>
             <DialogDescription>
-              Vas a eliminar <strong>{trip.name}</strong>. Esta accion oculta el
-              viaje de la lista, pero los datos quedan guardados.
+              Vas a eliminar <strong>{trip.name}</strong>. Esta acción oculta el viaje de la lista,
+              pero los datos quedan guardados.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

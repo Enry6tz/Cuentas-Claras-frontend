@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
 import {
   LayoutDashboard,
   Map,
@@ -10,6 +11,7 @@ import {
   Settings,
   ChevronRight,
   X,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/ui-store';
@@ -24,7 +26,10 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useUser();
   const { sidebarExpanded, toggleSidebar, mobileSidebarOpen, setMobileSidebarOpen } = useUIStore();
+
+  const isAdmin = user?.publicMetadata?.admin === true;
 
   return (
     <>
@@ -74,6 +79,23 @@ export function Sidebar() {
                 </li>
               );
             })}
+            {isAdmin && (
+              <li>
+                <Link
+                  href="/admin"
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                    pathname.startsWith('/admin')
+                      ? 'bg-blue-600 text-white'
+                      : 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950',
+                  )}
+                  onClick={() => setMobileSidebarOpen(false)}
+                >
+                  <ShieldCheck className="h-5 w-5" />
+                  Admin
+                </Link>
+              </li>
+            )}
           </ul>
         </nav>
       </aside>
@@ -121,6 +143,25 @@ export function Sidebar() {
                 <li key={item.href}>{linkContent}</li>
               );
             })}
+            {isAdmin && (
+              <li>
+                <Link
+                  href="/admin"
+                  className={cn(
+                    'flex items-center rounded-lg transition-colors',
+                    sidebarExpanded ? 'gap-3 px-3 py-2.5' : 'justify-center p-2.5',
+                    pathname.startsWith('/admin')
+                      ? 'bg-blue-600 text-white'
+                      : 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950',
+                  )}
+                >
+                  <ShieldCheck className="h-5 w-5 shrink-0" />
+                  {sidebarExpanded && (
+                    <span className="text-sm font-medium">Admin</span>
+                  )}
+                </Link>
+              </li>
+            )}
           </ul>
         </nav>
 
