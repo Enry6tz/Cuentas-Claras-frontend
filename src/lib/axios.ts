@@ -1,42 +1,26 @@
 import axios from 'axios';
 
+/**
+ * Cliente HTTP del frontend. Apunta al **BFF de Next** (`/api`), no al backend
+ * NestJS directo.
+ *
+ * La autenticación viaja por la cookie de sesión de Clerk (same-origin): el
+ * route handler la resuelve server-side con `auth()` y reenvía el JWT al
+ * backend. Por eso el cliente ya **no** maneja ni adjunta el token.
+ */
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001',
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Variable a nivel de módulo: siempre apunta al getter más reciente.
-// El interceptor de abajo la lee en cada request — sin closures stale.
-let _getToken: (() => Promise<string | null>) | null = null;
-
-export function setAuthToken(getToken: () => Promise<string | null>) {
-  _getToken = getToken;
-}
-
-// Un único interceptor de request, registrado una sola vez.
-api.interceptors.request.use(async (config) => {
-  if (_getToken) {
-    const token = await _getToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  }
-  return config;
-});
-
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
+  (error) => {
+    // Si el BFF responde 401 es porque Clerk ya no tiene sesión válida.
     if (error.response?.status === 401 && typeof window !== 'undefined') {
-      // Solo redirige si Clerk ya no tiene sesión activa.
-      // Si hay token válido, el 401 es un error del backend (user no en BD, etc.)
-      // y TanStack Query va a reintentar con el token correcto.
-      const token = _getToken ? await _getToken() : null;
-      if (!token) {
-        window.location.href = '/sign-in';
-      }
+      window.location.href = '/sign-in';
     }
     return Promise.reject(error);
   },

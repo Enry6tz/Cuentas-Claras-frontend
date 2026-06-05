@@ -1,8 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import {
   MoreVertical,
   ArrowLeftRight,
@@ -35,7 +33,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { PersonAvatar } from '@/components/shared/ui-bits';
-import { changeRole, removeParticipant, leaveTrip } from '@/lib/api/participants';
+import { useParticipantMutations } from '@/hooks/querys/participants/useParticipantMutations';
 import type { Participation, ParticipationRole } from '@/types';
 
 interface ParticipantActionsProps {
@@ -43,14 +41,6 @@ interface ParticipantActionsProps {
   participation: Participation;
   currentUserRole: ParticipationRole;
   isCurrentUser: boolean;
-}
-
-function extractErrorMessage(err: unknown, fallback: string): string {
-  const status = (err as { response?: { status?: number } })?.response?.status;
-  if (status === 409) return 'El usuario tiene saldo pendiente. Saldá las deudas primero.';
-  if (status === 400) return 'El viaje está finalizado.';
-  if (status === 403) return 'No tenés permiso para realizar esta acción.';
-  return fallback;
 }
 
 const ROLE_LABELS: Record<ParticipationRole, string> = {
@@ -65,8 +55,6 @@ export function ParticipantActions({
   currentUserRole,
   isCurrentUser,
 }: ParticipantActionsProps) {
-  const queryClient = useQueryClient();
-
   const [roleOpen, setRoleOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
@@ -76,40 +64,11 @@ export function ParticipantActions({
   const email = participation.user?.email ?? '';
   const isBlocked = parseFloat(participation.currentBalance ?? '0') !== 0;
 
-  function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ['trips', tripId, 'participants'] });
-    queryClient.invalidateQueries({ queryKey: ['trips', tripId] });
-  }
-
-  const roleMutation = useMutation({
-    mutationFn: (role: ParticipationRole) => changeRole(tripId, participation.userId, role),
-    onSuccess: () => {
-      toast.success('Rol actualizado');
-      invalidate();
-      setRoleOpen(false);
-    },
-    onError: (err) => toast.error(extractErrorMessage(err, 'No se pudo cambiar el rol')),
-  });
-
-  const removeMutation = useMutation({
-    mutationFn: () => removeParticipant(tripId, participation.userId),
-    onSuccess: () => {
-      toast.success('Integrante quitado');
-      invalidate();
-      setRemoveOpen(false);
-    },
-    onError: (err) => toast.error(extractErrorMessage(err, 'No se pudo quitar el integrante')),
-  });
-
-  const leaveMutation = useMutation({
-    mutationFn: () => leaveTrip(tripId),
-    onSuccess: () => {
-      toast.success('Saliste del viaje');
-      invalidate();
-      setLeaveOpen(false);
-    },
-    onError: (err) => toast.error(extractErrorMessage(err, 'No se pudo salir del viaje')),
-  });
+  const {
+    changeRole: roleMutation,
+    remove: removeMutation,
+    leave: leaveMutation,
+  } = useParticipantMutations(tripId);
 
   const personBlock = (
     <div className="flex items-center gap-3">
@@ -155,7 +114,11 @@ export function ParticipantActions({
               </Button>
               <Button
                 variant="destructive"
-                onClick={() => leaveMutation.mutate()}
+                onClick={() =>
+                  leaveMutation.mutate(undefined, {
+                    onSuccess: () => setLeaveOpen(false),
+                  })
+                }
                 disabled={leaveMutation.isPending || isBlocked}
               >
                 <LogOut className="size-4" />
@@ -244,7 +207,12 @@ export function ParticipantActions({
               Cancelar
             </Button>
             <Button
-              onClick={() => roleMutation.mutate(selectedRole)}
+              onClick={() =>
+                roleMutation.mutate(
+                  { userId: participation.userId, role: selectedRole },
+                  { onSuccess: () => setRoleOpen(false) },
+                )
+              }
               disabled={roleMutation.isPending || selectedRole === participation.role}
             >
               {roleMutation.isPending ? 'Guardando...' : 'Guardar cambios'}
@@ -280,7 +248,11 @@ export function ParticipantActions({
             </Button>
             <Button
               variant="destructive"
-              onClick={() => removeMutation.mutate()}
+              onClick={() =>
+                removeMutation.mutate(participation.userId, {
+                  onSuccess: () => setRemoveOpen(false),
+                })
+              }
               disabled={removeMutation.isPending}
             >
               <Trash2 className="size-4" />

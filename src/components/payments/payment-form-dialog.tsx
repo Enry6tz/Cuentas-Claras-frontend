@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowRight, ArrowLeftRight, X } from 'lucide-react';
 import {
@@ -26,8 +25,8 @@ import {
 import { PersonAvatar } from '@/components/shared/ui-bits';
 import { DatePicker } from '@/components/shared/date-picker';
 import { cn } from '@/lib/utils';
-import { createPayment, type CreatePaymentPayload } from '@/lib/api/payments';
-import { getCurrencyRate } from '@/lib/api/currency';
+import { useCurrencyRate } from '@/hooks/querys/currency/useCurrencyRate';
+import { usePaymentMutations } from '@/hooks/querys/payments/usePaymentMutations';
 import type { Participation } from '@/types';
 
 const CURRENCIES = ['ARS', 'USD', 'EUR', 'BRL', 'CLP', 'UYU', 'BOB', 'COP', 'MXN'];
@@ -57,8 +56,6 @@ export function PaymentFormDialog({
   defaultCreditorId,
   defaultAmount,
 }: PaymentFormDialogProps) {
-  const queryClient = useQueryClient();
-
   const [debtorId, setDebtorId] = useState(defaultDebtorId ?? '');
   const [creditorId, setCreditorId] = useState(defaultCreditorId ?? '');
   const [amount, setAmount] = useState(defaultAmount ?? '');
@@ -67,13 +64,10 @@ export function PaymentFormDialog({
   const [note, setNote] = useState('');
   const [date, setDate] = useState('');
 
-  const { data: rateData, isLoading: rateLoading } = useQuery({
-    queryKey: ['currency-rate', currency, baseCurrency],
-    queryFn: () => getCurrencyRate(currency, baseCurrency),
-    enabled: currency !== baseCurrency,
-    staleTime: 60 * 60 * 1000,
-    retry: 1,
-  });
+  const { data: rateData, isLoading: rateLoading } = useCurrencyRate(
+    currency,
+    baseCurrency,
+  );
 
   const apiRate = rateData?.rate ?? null;
   const manualRateNum = manualRate ? parseFloat(manualRate) : null;
@@ -85,21 +79,7 @@ export function PaymentFormDialog({
 
   const samePerson = !!debtorId && !!creditorId && debtorId === creditorId;
 
-  const mutation = useMutation({
-    mutationFn: (payload: CreatePaymentPayload) => createPayment(tripId, payload),
-    onSuccess: () => {
-      toast.success('Pago registrado');
-      queryClient.invalidateQueries({ queryKey: ['payments', tripId] });
-      queryClient.invalidateQueries({ queryKey: ['balances', tripId] });
-      onOpenChange(false);
-    },
-    onError: (err: unknown) => {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? 'No se pudo registrar el pago';
-      toast.error(typeof message === 'string' ? message : 'Algo salio mal');
-    },
-  });
+  const { create: mutation } = usePaymentMutations(tripId);
 
   function handleSubmit() {
     if (!debtorId || !creditorId) {
@@ -121,13 +101,16 @@ export function PaymentFormDialog({
       baseAmount = Math.round(parsedAmount * effectiveRate * 100) / 100;
     }
 
-    mutation.mutate({
-      debtorId,
-      creditorId,
-      amount: baseAmount,
-      note: note.trim() || undefined,
-      date: date || undefined,
-    });
+    mutation.mutate(
+      {
+        debtorId,
+        creditorId,
+        amount: baseAmount,
+        note: note.trim() || undefined,
+        date: date || undefined,
+      },
+      { onSuccess: () => onOpenChange(false) },
+    );
   }
 
   // Mapa value→label para que el trigger muestre el nombre (no el UUID) aun con el popup cerrado.

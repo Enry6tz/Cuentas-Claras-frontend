@@ -9,11 +9,14 @@ import {
   Plane,
   Receipt,
   CreditCard,
+  Mail,
   Settings,
   ShieldCheck,
   Wallet,
 } from 'lucide-react';
 import { SidebarAddTripForm } from '@/components/sidebar-add-trip-form';
+import { Badge } from '@/components/ui/badge';
+import { useMyInvitations } from '@/hooks/querys/invitations/useMyInvitations';
 import {
   Sidebar,
   SidebarContent,
@@ -32,6 +35,7 @@ const navItems = [
   { href: '/trips', label: 'Viajes', icon: Plane },
   { href: '/expenses', label: 'Gastos', icon: Receipt },
   { href: '/payments', label: 'Pagos', icon: CreditCard },
+  { href: '/invitations', label: 'Invitaciones', icon: Mail },
   { href: '/account', label: 'Cuenta', icon: Settings },
 ];
 
@@ -40,6 +44,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useUser();
   const isAdmin = user?.publicMetadata?.admin === true;
   const isActive = (href: string) => pathname.startsWith(href);
+
+  const { data: invitations = [] } = useMyInvitations();
+  const invitationCount = invitations.length;
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -62,18 +69,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu>
-            {navItems.map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton
-                  isActive={isActive(item.href)}
-                  tooltip={item.label}
-                  render={<Link href={item.href} />}
-                >
-                  <item.icon />
-                  <span>{item.label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
+            {navItems.map((item) => {
+              const showCount =
+                item.href === '/invitations' && invitationCount > 0;
+              return (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton
+                    isActive={isActive(item.href)}
+                    tooltip={item.label}
+                    render={<Link href={item.href} />}
+                  >
+                    <item.icon />
+                    <span>{item.label}</span>
+                    {showCount && (
+                      <Badge
+                        variant="secondary"
+                        className="ml-auto bg-destructive/10 text-destructive border-transparent group-data-[collapsible=icon]:hidden"
+                      >
+                        {invitationCount}
+                      </Badge>
+                    )}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
           </SidebarMenu>
         </SidebarGroup>
 
