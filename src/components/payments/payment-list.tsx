@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Trash2 } from 'lucide-react';
+import { ArrowRight, Trash2 } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -68,26 +68,44 @@ export function PaymentList({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Fecha</TableHead>
-          <TableHead>Deudor</TableHead>
-          <TableHead>Acreedor</TableHead>
-          <TableHead>Monto</TableHead>
+          <TableHead>De</TableHead>
+          <TableHead></TableHead>
+          <TableHead>A</TableHead>
           <TableHead>Nota</TableHead>
+          <TableHead>Fecha</TableHead>
+          <TableHead className="text-right">Monto</TableHead>
           <TableHead></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {payments.map((payment) => (
           <TableRow key={payment.id}>
-            <TableCell className="text-xs">
-              {new Date(payment.date).toLocaleDateString('es-AR')}
+            <TableCell>
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                  {payment.debtor?.name?.charAt(0).toUpperCase() ?? '?'}
+                </div>
+                <span className="text-sm text-foreground">{payment.debtor?.name ?? '—'}</span>
+              </div>
             </TableCell>
-            <TableCell>{payment.debtor?.name ?? '—'}</TableCell>
-            <TableCell>{payment.creditor?.name ?? '—'}</TableCell>
-            <TableCell className="font-medium">{payment.amount}</TableCell>
+            <TableCell className="text-muted-foreground">
+              <ArrowRight className="h-4 w-4" />
+            </TableCell>
+            <TableCell>
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                  {payment.creditor?.name?.charAt(0).toUpperCase() ?? '?'}
+                </div>
+                <span className="text-sm text-foreground">{payment.creditor?.name ?? '—'}</span>
+              </div>
+            </TableCell>
             <TableCell className="text-xs text-muted-foreground">
               {payment.note || '—'}
             </TableCell>
+            <TableCell className="text-xs text-muted-foreground">
+              {new Date(payment.date).toLocaleDateString('es-AR')}
+            </TableCell>
+            <TableCell className="text-right font-medium tabular-nums">{payment.amount}</TableCell>
             <TableCell>
               {canDelete(payment) && (
                 <Button

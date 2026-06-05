@@ -76,38 +76,48 @@ export function ExpenseList({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Fecha</TableHead>
           <TableHead>Descripción</TableHead>
-          <TableHead>Monto original</TableHead>
-          <TableHead>Base</TableHead>
-          <TableHead>Tipo</TableHead>
+          <TableHead>Fecha</TableHead>
+          <TableHead>Pagó</TableHead>
+          <TableHead>División</TableHead>
+          <TableHead className="text-right">Monto</TableHead>
           <TableHead></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {expenses.map((expense) => (
           <TableRow key={expense.id}>
-            <TableCell className="text-xs">
-              {new Date(expense.date).toLocaleDateString('es-AR')}
-            </TableCell>
-            <TableCell className="font-medium">
-              {expense.description || '—'}
+            <TableCell>
+              <p className="font-medium text-foreground">{expense.description || '—'}</p>
               {expense.category && (
-                <Badge variant="outline" className="ml-2 text-xs">
+                <Badge variant="secondary" className="mt-0.5 text-xs">
                   {expense.category}
                 </Badge>
               )}
             </TableCell>
-            <TableCell>
-              {expense.originalAmount} {expense.originalCurrency}
-            </TableCell>
             <TableCell className="text-xs text-muted-foreground">
-              {expense.baseAmount ?? '—'}
+              {new Date(expense.date).toLocaleDateString('es-AR')}
             </TableCell>
             <TableCell>
-              <Badge variant="secondary" className="text-xs">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                  {expense.creator?.name?.charAt(0).toUpperCase() ?? '?'}
+                </div>
+                <span className="text-sm text-foreground">{expense.creator?.name ?? '—'}</span>
+              </div>
+            </TableCell>
+            <TableCell>
+              <Badge variant={expense.splitType === 'PERCENT' ? 'secondary' : 'outline'} className="text-xs">
                 {splitTypeLabels[expense.splitType]}
               </Badge>
+            </TableCell>
+            <TableCell className="text-right">
+              <p className="font-medium tabular-nums">{expense.baseAmount ?? expense.originalAmount}</p>
+              {expense.originalCurrency !== 'ARS' && (
+                <p className="text-xs text-muted-foreground tabular-nums">
+                  {expense.originalAmount} {expense.originalCurrency}
+                </p>
+              )}
             </TableCell>
             <TableCell>
               {canDelete(expense) && (

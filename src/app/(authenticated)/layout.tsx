@@ -11,9 +11,9 @@ export default function AuthenticatedLayout({
     <div className="flex h-screen">
       <UserSync />
       <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden overflow-y-auto bg-muted/50 ">
         <TopBar />
-        <main className="flex-1 overflow-y-auto bg-muted/50 p-6">
+        <main className="p-6 px-8">
           {children}
         </main>
       </div>
