@@ -1,15 +1,11 @@
 'use client';
 
 import { useState, use, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useUser } from '@clerk/nextjs';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import {
   ArrowLeft,
-  ArrowLeftRight,
-  BarChart3,
   Calendar,
   Coins,
   Users,
@@ -19,10 +15,14 @@ import {
   Pencil,
   Trash2,
   Plus,
-  User as UserIcon,
-  UserPlus,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardAction } from '@/components/ui/card';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -34,18 +34,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { TripStatusBadge } from '@/components/shared/ui-bits';
+import { StaggerList, StaggerItem } from '@/components/motion/stagger';
 import { TripFormDialog } from '@/components/trips/trip-form-dialog';
 import { ParticipantsList } from '@/components/trips/participants-list';
-import { AddParticipantDialog } from '@/components/trips/add-participant-dialog';
 import { ExpenseList } from '@/components/expenses/expense-list';
 import { ExpenseFormDialog } from '@/components/expenses/expense-form-dialog';
 import { PaymentList } from '@/components/payments/payment-list';
 import { PaymentFormDialog } from '@/components/payments/payment-form-dialog';
 import { BalanceSummary } from '@/components/balances/balance-summary';
 import { SettlementSuggestions } from '@/components/balances/settlement-suggestions';
-import { getTrip, deleteTrip } from '@/lib/api/trips';
-import { getMe } from '@/lib/api/users';
+import { useTrip } from '@/hooks/querys/trips/useTrip';
+import { useTripMutations } from '@/hooks/querys/trips/useTripMutations';
+import { useMe } from '@/hooks/querys/users/useMe';
+import { tripBannerStyle, tripIcon } from '@/lib/trip-appearance';
 
 const CURRENCY_NAMES: Record<string, string> = {
   ARS: 'Peso argentino',
@@ -66,41 +67,32 @@ interface TripDetailPageProps {
 export default function TripDetailPage({ params }: TripDetailPageProps) {
   const { id } = use(params);
   const router = useRouter();
-  const queryClient = useQueryClient();
+
+  // Intención de navegación desde las páginas de Gastos/Pagos:
+  //   ?tab=expenses|payments → abre esa pestaña
+  //   ?nuevo=gasto|pago      → abre directamente el formulario de creación
+  const searchParams = useSearchParams();
+  const nuevo = searchParams.get('nuevo');
+  const tabParam = searchParams.get('tab');
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [expenseFormOpen, setExpenseFormOpen] = useState(false);
-  const [paymentFormOpen, setPaymentFormOpen] = useState(false);
-  const [addParticipantOpen, setAddParticipantOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('participants');
+  const [expenseFormOpen, setExpenseFormOpen] = useState(nuevo === 'gasto');
+  const [paymentFormOpen, setPaymentFormOpen] = useState(nuevo === 'pago');
+  const [activeTab, setActiveTab] = useState(
+    nuevo === 'gasto'
+      ? 'expenses'
+      : nuevo === 'pago'
+        ? 'payments'
+        : (tabParam ?? 'participants'),
+  );
   const { user: clerkUser } = useUser();
 
-  const { data: trip, isLoading, isError } = useQuery({
-    queryKey: ['trips', id],
-    queryFn: () => getTrip(id),
-  });
+  const { data: trip, isLoading, isError } = useTrip(id);
 
-  const { data: currentUser } = useQuery({
-    queryKey: ['users', 'me'],
-    queryFn: getMe,
-    staleTime: 5 * 60_000,
-  });
+  const { data: currentUser } = useMe();
 
-  const deleteMutation = useMutation({
-    mutationFn: () => deleteTrip(id),
-    onSuccess: () => {
-      toast.success('Viaje eliminado');
-      queryClient.invalidateQueries({ queryKey: ['trips'] });
-      router.push('/trips');
-    },
-    onError: (err: unknown) => {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? 'No se pudo eliminar el viaje';
-      toast.error(typeof message === 'string' ? message : 'Algo salió mal');
-    },
-  });
+  const { remove } = useTripMutations();
 
   const currentUserId = useMemo(() => {
     const clerkEmail = clerkUser?.primaryEmailAddress?.emailAddress;
@@ -150,74 +142,92 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
 
   return (
     <div className="space-y-6">
-      <Link href="/trips">
-        <Button variant="ghost" size="sm" className="text-muted-foreground">
-          <ArrowLeft className="size-4" />
-          Volver a viajes
-        </Button>
-      </Link>
+      {/* Cover: color del viaje con la info encima. Un scrim oscuro garantiza
+          que el texto blanco se lea sobre cualquiera de los 30 colores. */}
+      <div
+        className="relative overflow-hidden rounded-xl"
+        style={tripBannerStyle(trip.colorId)}
+      >
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />
 
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold text-foreground">{trip.name}</h1>
-            <TripStatusBadge status={trip.status} />
-          </div>
-          {trip.description && (
-            <p className="text-sm text-muted-foreground">{trip.description}</p>
-          )}
-        </div>
         {isCreator && (
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+          <div className="absolute right-3 top-3 z-20 flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => setEditOpen(true)}
+              className="border-0 bg-white/15 text-white backdrop-blur hover:bg-white/25"
+            >
               <Pencil className="size-4" />
               Editar
             </Button>
             <Button
-              variant="outline"
               size="sm"
               onClick={() => setDeleteOpen(true)}
-              className="gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="border-0 bg-white/15 text-white backdrop-blur hover:bg-red-500/70"
             >
               <Trash2 className="size-4" />
               Eliminar
             </Button>
           </div>
         )}
-      </div>
 
-      {/* Info row */}
-      <Card>
-        <CardContent className="grid gap-4 p-0 sm:grid-cols-3 sm:divide-x">
-          <div className="space-y-1 px-5 py-4">
-            <p className="text-xs font-medium text-muted-foreground">Fechas</p>
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-              <Calendar className="size-4 text-muted-foreground" />
-              {formatDate(trip.startDate)} – {formatDate(trip.endDate)}
-            </p>
-          </div>
-          <div className="space-y-1 px-5 py-4">
-            <p className="text-xs font-medium text-muted-foreground">Moneda base</p>
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-              <Coins className="size-4 text-muted-foreground" />
-              {trip.baseCurrency}
-              {CURRENCY_NAMES[trip.baseCurrency] && (
-                <span className="font-normal text-muted-foreground">
-                  · {CURRENCY_NAMES[trip.baseCurrency]}
-                </span>
-              )}
-            </p>
-          </div>
-          <div className="space-y-1 px-5 py-4">
-            <p className="text-xs font-medium text-muted-foreground">Integrantes</p>
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-              <Users className="size-4 text-muted-foreground" />
-              {participantCount} {participantCount === 1 ? 'persona' : 'personas'}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+        <StaggerList className="relative z-10 flex min-h-56 flex-col justify-end gap-4 p-5 sm:p-7">
+          <StaggerItem>
+            <div className="flex items-center gap-3">
+              <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-white/90 text-3xl shadow-md">
+                {tripIcon(trip.iconId)}
+              </span>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h1 className="text-2xl font-bold text-white drop-shadow-sm sm:text-3xl">
+                    {trip.name}
+                  </h1>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      trip.status === 'ACTIVE'
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-zinc-600/90 text-white'
+                    }`}
+                  >
+                    <span className="size-1.5 rounded-full bg-white" />
+                    {trip.status === 'ACTIVE' ? 'En curso' : 'Finalizado'}
+                  </span>
+                </div>
+                {trip.description && (
+                  <p className="mt-1 text-sm text-white/85 drop-shadow-sm">
+                    {trip.description}
+                  </p>
+                )}
+              </div>
+            </div>
+          </StaggerItem>
+
+          <StaggerItem>
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+              <CoverInfo
+                icon={<Calendar className="size-4" />}
+                label="Fechas"
+                value={`${formatDate(trip.startDate)} – ${formatDate(trip.endDate)}`}
+              />
+              <CoverInfo
+                icon={<Coins className="size-4" />}
+                label="Moneda base"
+                value={
+                  trip.baseCurrency +
+                  (CURRENCY_NAMES[trip.baseCurrency]
+                    ? ` · ${CURRENCY_NAMES[trip.baseCurrency]}`
+                    : '')
+                }
+              />
+              <CoverInfo
+                icon={<Users className="size-4" />}
+                label="Integrantes"
+                value={`${participantCount} ${participantCount === 1 ? 'persona' : 'personas'}`}
+              />
+            </div>
+          </StaggerItem>
+        </StaggerList>
+      </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -257,7 +267,7 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
 
         <TabsContent value="expenses" className="mt-4">
           <Card>
-            <CardHeader className="flex-row items-start justify-between gap-2">
+            <CardHeader>
               <div className="space-y-0.5">
                 <CardTitle className="text-base font-semibold">Gastos del viaje</CardTitle>
                 <p className="text-xs text-muted-foreground">
@@ -265,10 +275,12 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
                 </p>
               </div>
               {!isSupervisor && (
-                <Button size="sm" onClick={() => setExpenseFormOpen(true)}>
-                  <Plus className="size-4" />
-                  Nuevo gasto
-                </Button>
+                <CardAction>
+                  <Button size="sm" onClick={() => setExpenseFormOpen(true)}>
+                    <Plus className="size-4" />
+                    Nuevo gasto
+                  </Button>
+                </CardAction>
               )}
             </CardHeader>
             <CardContent className="p-0">
@@ -286,7 +298,7 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
 
         <TabsContent value="payments" className="mt-4">
           <Card>
-            <CardHeader className="flex-row items-start justify-between gap-2">
+            <CardHeader>
               <div className="space-y-0.5">
                 <CardTitle className="text-base font-semibold">Pagos</CardTitle>
                 <p className="text-xs text-muted-foreground">
@@ -294,10 +306,12 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
                 </p>
               </div>
               {!isSupervisor && (
-                <Button size="sm" onClick={() => setPaymentFormOpen(true)}>
-                  <Plus className="size-4" />
-                  Registrar pago
-                </Button>
+                <CardAction>
+                  <Button size="sm" onClick={() => setPaymentFormOpen(true)}>
+                    <Plus className="size-4" />
+                    Registrar pago
+                  </Button>
+                </CardAction>
               )}
             </CardHeader>
             <CardContent className="p-0">
@@ -363,12 +377,6 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
         baseCurrency={trip.baseCurrency}
       />
 
-      <AddParticipantDialog
-        tripId={id}
-        open={addParticipantOpen}
-        onOpenChange={setAddParticipantOpen}
-      />
-
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -382,20 +390,42 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
             <Button
               variant="outline"
               onClick={() => setDeleteOpen(false)}
-              disabled={deleteMutation.isPending}
+              disabled={remove.isPending}
             >
               Cancelar
             </Button>
             <Button
               variant="destructive"
-              onClick={() => deleteMutation.mutate()}
-              disabled={deleteMutation.isPending}
+              onClick={() =>
+                remove.mutate(id, { onSuccess: () => router.push('/trips') })
+              }
+              disabled={remove.isPending}
             >
-              {deleteMutation.isPending ? 'Eliminando...' : 'Eliminar'}
+              {remove.isPending ? 'Eliminando...' : 'Eliminar'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function CoverInfo({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-white">
+      <span className="text-white/80">{icon}</span>
+      <div className="leading-tight">
+        <p className="text-[11px] uppercase tracking-wide text-white/70">{label}</p>
+        <p className="text-sm font-semibold sm:text-base">{value}</p>
+      </div>
     </div>
   );
 }

@@ -1,9 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { UserPlus } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -15,8 +20,9 @@ import {
 } from '@/components/ui/table';
 import { PersonAvatar, RoleBadge } from '@/components/shared/ui-bits';
 import { ParticipantActions } from './participant-actions';
-import { AddParticipantDialog } from './add-participant-dialog';
-import { listParticipants } from '@/lib/api/participants';
+import { InviteParticipantDialog } from './invite-participant-dialog';
+import { TripInvitationsCard } from './trip-invitations-card';
+import { useParticipants } from '@/hooks/querys/participants/useParticipants';
 
 interface ParticipantsListProps {
   tripId: string;
@@ -26,19 +32,16 @@ interface ParticipantsListProps {
 export function ParticipantsList({ tripId, currentUserId }: ParticipantsListProps) {
   const [addOpen, setAddOpen] = useState(false);
 
-  const { data: participants = [], isLoading, isError } = useQuery({
-    queryKey: ['trips', tripId, 'participants'],
-    queryFn: () => listParticipants(tripId),
-  });
+  const { data: participants = [], isLoading, isError } = useParticipants(tripId);
 
   const currentParticipation = participants.find((p) => p.userId === currentUserId);
   const currentUserRole = currentParticipation?.role ?? 'MEMBER';
   const isCreator = currentUserRole === 'CREATOR';
 
   return (
-    <>
+    <div className="space-y-6">
       <Card>
-        <CardHeader className="flex-row items-start justify-between gap-2">
+        <CardHeader>
           <div className="space-y-0.5">
             <CardTitle className="text-base font-semibold">Integrantes</CardTitle>
             <p className="text-xs text-muted-foreground">
@@ -46,10 +49,12 @@ export function ParticipantsList({ tripId, currentUserId }: ParticipantsListProp
             </p>
           </div>
           {isCreator && (
-            <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
-              <UserPlus className="size-4" />
-              Agregar integrante
-            </Button>
+            <CardAction>
+              <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
+                <UserPlus className="size-4" />
+                Invitar integrante
+              </Button>
+            </CardAction>
           )}
         </CardHeader>
         <CardContent className="p-0">
@@ -154,9 +159,11 @@ export function ParticipantsList({ tripId, currentUserId }: ParticipantsListProp
         </CardContent>
       </Card>
 
+      {isCreator && <TripInvitationsCard tripId={tripId} />}
+
       {isCreator && (
-        <AddParticipantDialog tripId={tripId} open={addOpen} onOpenChange={setAddOpen} />
+        <InviteParticipantDialog tripId={tripId} open={addOpen} onOpenChange={setAddOpen} />
       )}
-    </>
+    </div>
   );
 }

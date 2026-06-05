@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { QueryKey } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -16,43 +16,43 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/shared/date-picker';
+import { useApiMutation } from '@/hooks/querys/common/useApiMutation';
+import { createTrip, updateTrip } from '@/services/api/trips';
+import { cn } from '@/lib/utils';
 import {
-  createTrip,
-  updateTrip,
-  type TripPayload,
-  type UpdateTripPayload,
-} from '@/lib/api/trips';
-import type { Trip } from '@/types';
+  TRIP_ICONS,
+  TRIP_COLORS,
+  DEFAULT_ICON_ID,
+  DEFAULT_COLOR_ID,
+  tripIcon,
+  tripColorHex,
+} from '@/lib/trip-appearance';
+import type { Trip, TripPayload, UpdateTripPayload } from '@/types';
 
 /**
- * Dialog (modal) reutilizable para crear o editar un Trip.
+ * Dialog reutilizable para crear o editar un Trip.
+ *   - Si `trip` viene → modo edit; si no → modo create.
  *
- * Decision de diseño: en lugar de tener dos componentes separados (uno para
- * crear y otro para editar), usamos uno solo que se comporta distinto segun
- * reciba o no un `trip` prop.
- *   - Si `trip` viene -> modo edit.
- *   - Si `trip` es undefined -> modo create.
- *
- * Asi reutilizamos toda la logica del form (estado, validacion, submit) y
- * solo cambia que mutation se dispara y que titulo muestra el modal.
- *
- * Convencion en este proyecto: los dialogs son "controlados" desde afuera
- * (`open` + `onOpenChange`), asi el padre decide cuando abrir/cerrar y puede,
- * por ejemplo, mostrar un loading antes de abrir, o cerrar cuando recibe
- * confirmacion de otro lado.
+ * Los services (create/update) y las queryKeys a invalidar son inyectables por
+ * props para poder reusar el mismo form desde el panel de admin (que pega a los
+ * endpoints /admin y refresca otra cache).
  */
 interface TripFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  trip?: Trip; // si viene -> modo edit
+  trip?: Trip;
+  createFn?: (payload: TripPayload) => Promise<Trip>;
   updateFn?: (id: string, payload: UpdateTripPayload) => Promise<Trip>;
+  invalidateKeys?: QueryKey[];
 }
 
 export function TripFormDialog({
   open,
   onOpenChange,
   trip,
-  updateFn,
+  createFn = createTrip,
+  updateFn = updateTrip,
+  invalidateKeys = [['trips']],
 }: TripFormDialogProps) {
   const isEdit = Boolean(trip);
 
@@ -65,51 +65,19 @@ export function TripFormDialog({
     trip?.endDate ? trip.endDate.slice(0, 10) : '',
   );
   const [baseCurrency, setBaseCurrency] = useState(trip?.baseCurrency ?? 'ARS');
+  const [iconId, setIconId] = useState<number>(trip?.iconId ?? DEFAULT_ICON_ID);
+  const [colorId, setColorId] = useState<number>(trip?.colorId ?? DEFAULT_COLOR_ID);
 
-  // TanStack Query: cliente global usado para INVALIDAR cache despues del
-  // submit, asi la lista de trips se refetchea automaticamente.
-  const queryClient = useQueryClient();
-
-  /**
-   * `useMutation` envuelve un side-effect (POST/PATCH/DELETE).
-   * Te da estados (`isPending`, `isError`) y callbacks (`onSuccess`, `onError`)
-   * sin tener que manejar useState/try-catch manualmente.
-   */
-  const mutation = useMutation({
-    mutationFn: async (payload: TripPayload) => {
-      if (isEdit && trip) {
-        const fn = updateFn ?? updateTrip;
-        return fn(trip.id, payload);
-      }
-      return createTrip(payload);
-    },
-    onSuccess: (created) => {
-      toast.success(isEdit ? 'Viaje actualizado' : 'Viaje creado');
-
-      // Invalidar la lista hace que la `page.tsx` de trips refetchee y
-      // muestre el nuevo (o actualizado) trip sin que tengamos que tocar
-      // el estado manualmente. Es la magia de TanStack Query.
-      queryClient.invalidateQueries({ queryKey: ['trips'] });
-      // Si estamos en modo edit, tambien invalidamos el detalle.
-      if (isEdit) {
-        queryClient.invalidateQueries({ queryKey: ['trips', created.id] });
-      }
-
-      onOpenChange(false);
-    },
-    onError: (err: unknown) => {
-      // axios mete el body de error del back en `err.response.data`.
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? 'Algo salio mal';
-      toast.error(typeof message === 'string' ? message : 'Algo salio mal');
-    },
+  const mutation = useApiMutation({
+    mutationFn: (payload: TripPayload) =>
+      isEdit && trip ? updateFn(trip.id, payload) : createFn(payload),
+    invalidateKeys,
+    successMessage: isEdit ? 'Viaje actualizado' : 'Viaje creado',
   });
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
 
-    // Validacion de cliente (basica). El back va a re-validar via DTO igual.
     const trimmedName = name.trim();
     if (!trimmedName) {
       toast.error('El nombre es obligatorio');
@@ -120,20 +88,23 @@ export function TripFormDialog({
       return;
     }
 
-    // Construimos el payload omitiendo strings vacios para que viajen como
-    // undefined y el back los trate como "no setear" en lugar de string "".
-    mutation.mutate({
-      name: trimmedName,
-      description: description.trim() || undefined,
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
-      baseCurrency: baseCurrency.toUpperCase(),
-    });
+    mutation.mutate(
+      {
+        name: trimmedName,
+        description: description.trim() || undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        baseCurrency: baseCurrency.toUpperCase(),
+        iconId,
+        colorId,
+      },
+      { onSuccess: () => onOpenChange(false) },
+    );
   }
 
   return (
     <Dialog key={trip?.id ?? 'new'} open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>{isEdit ? 'Editar viaje' : 'Nuevo viaje'}</DialogTitle>
@@ -145,17 +116,70 @@ export function TripFormDialog({
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
+            {/* Preview + nombre */}
+            <div className="flex items-center gap-3">
+              <div
+                className="flex size-12 shrink-0 items-center justify-center rounded-xl text-2xl shadow-sm"
+                style={{ backgroundColor: tripColorHex(colorId) }}
+              >
+                {tripIcon(iconId)}
+              </div>
+              <div className="grid flex-1 gap-2">
+                <Label htmlFor="name">Nombre *</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Bariloche 2026"
+                  maxLength={100}
+                  required
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Selector de ícono */}
             <div className="grid gap-2">
-              <Label htmlFor="name">Nombre *</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Bariloche 2026"
-                maxLength={100}
-                required
-                autoFocus
-              />
+              <Label>Ícono</Label>
+              <div className="grid grid-cols-8 gap-1">
+                {TRIP_ICONS.map((emoji, i) => {
+                  const id = i + 1;
+                  return (
+                    <button
+                      type="button"
+                      key={id}
+                      onClick={() => setIconId(id)}
+                      className={cn(
+                        'flex aspect-square items-center justify-center rounded-md text-lg transition-colors hover:bg-muted',
+                        iconId === id && 'bg-muted ring-2 ring-primary',
+                      )}
+                    >
+                      {emoji}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Selector de color */}
+            <div className="grid gap-2">
+              <Label>Color</Label>
+              <div className="grid grid-cols-10 gap-1.5">
+                {TRIP_COLORS.map((c) => (
+                  <button
+                    type="button"
+                    key={c.id}
+                    title={c.name}
+                    onClick={() => setColorId(c.id)}
+                    style={{ backgroundColor: c.hex }}
+                    className={cn(
+                      'aspect-square rounded-md transition-transform hover:scale-110',
+                      colorId === c.id &&
+                        'ring-2 ring-foreground ring-offset-2 ring-offset-background',
+                    )}
+                  />
+                ))}
+              </div>
             </div>
 
             <div className="grid gap-2">

@@ -1,7 +1,5 @@
 'use client';
 
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import { Trash2, Receipt } from 'lucide-react';
 import {
   Table,
@@ -14,7 +12,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PersonAvatar } from '@/components/shared/ui-bits';
-import { listExpenses, deleteExpense } from '@/lib/api/expenses';
+import { useExpenses } from '@/hooks/querys/expenses/useExpenses';
+import { useExpenseMutations } from '@/hooks/querys/expenses/useExpenseMutations';
 import type { Expense, ExpenseSplitType, Participation } from '@/types';
 
 interface ExpenseListProps {
@@ -50,22 +49,9 @@ export function ExpenseList({
   isCreator,
   baseCurrency,
 }: ExpenseListProps) {
-  const queryClient = useQueryClient();
+  const { data: expenses, isLoading } = useExpenses(tripId);
 
-  const { data: expenses, isLoading } = useQuery({
-    queryKey: ['expenses', tripId],
-    queryFn: () => listExpenses(tripId),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteExpense(tripId, id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['expenses', tripId] });
-      queryClient.invalidateQueries({ queryKey: ['balances', tripId] });
-      toast.success('Gasto eliminado');
-    },
-    onError: () => toast.error('No se pudo eliminar el gasto'),
-  });
+  const { remove: deleteMutation } = useExpenseMutations(tripId);
 
   const canDelete = (expense: Expense) => {
     if (isSupervisor) return false;

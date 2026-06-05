@@ -1,135 +1,119 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import { Plane, Plus, Users, Receipt } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Plane, Plus } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { TripStatusBadge } from '@/components/shared/ui-bits';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { SearchBar } from '@/components/shared/search-bar';
+import { StaggerList, StaggerItem } from '@/components/motion/stagger';
 import { TripFormDialog } from '@/components/trips/trip-form-dialog';
-import { listTrips } from '@/lib/api/trips';
+import { TripRow } from '@/components/trips/trip-row';
+import { useTrips } from '@/hooks/querys/trips/useTrips';
+import { useMe } from '@/hooks/querys/users/useMe';
 
-/**
- * Pagina /trips — listar mis viajes.
- *
- * Marcada como Client Component (`'use client'`) porque usa hooks de TanStack
- * Query (`useQuery`) y estado local (`useState`) para abrir el modal.
- * En App Router de Next.js, los componentes son Server Components por default;
- * cuando necesitas interactividad (state, effects, hooks de cliente) tenes
- * que opt-in con la directiva.
- */
+type StatusFilter = 'all' | 'active' | 'finalized';
+
 export default function TripsPage() {
   const [createOpen, setCreateOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState<StatusFilter>('all');
 
-  /**
-   * useQuery se encarga de:
-   *   - Llamar a `listTrips()` cuando el componente monta.
-   *   - Cachear el resultado bajo la queryKey ['trips'].
-   *   - Refetchear automaticamente cuando otra parte invalida ese cache
-   *     (en nuestro caso, el TripFormDialog hace `invalidateQueries(['trips'])`
-   *     al crear/editar).
-   *   - Darnos `isLoading`, `isError`, `data` para renderizar.
-   */
-  const { data: trips, isLoading, isError } = useQuery({
-    queryKey: ['trips'],
-    queryFn: listTrips,
-  });
+  const { data: trips, isLoading, isError } = useTrips();
+  const { data: me } = useMe();
+
+  const filtered = useMemo(() => {
+    const list = trips ?? [];
+    const q = query.trim().toLowerCase();
+    return list.filter((t) => {
+      const matchesStatus =
+        status === 'all' ||
+        (status === 'active' && t.status === 'ACTIVE') ||
+        (status === 'finalized' && t.status === 'FINALIZED');
+      const matchesQuery = !q || t.name.toLowerCase().includes(q);
+      return matchesStatus && matchesQuery;
+    });
+  }, [trips, query, status]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Viajes</h1>
-          <p className="text-sm text-muted-foreground">
-            Tus viajes activos y finalizados.
-          </p>
-        </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Nuevo viaje
-        </Button>
-      </div>
+    <div className="space-y-5">
+      {/* Barra de herramientas: buscador + acción principal */}
+      <Card className="py-3">
+        <CardContent className="flex items-center gap-3 px-3">
+          <SearchBar
+            value={query}
+            onChange={setQuery}
+            placeholder="Buscar viaje por nombre…"
+          />
+          <Button className="h-11 shrink-0" onClick={() => setCreateOpen(true)}>
+            <Plus className="size-4" />
+            <span className="hidden sm:inline">Nuevo viaje</span>
+          </Button>
+        </CardContent>
+      </Card>
 
-      {/* Estados condicionales: loading -> error -> vacio -> grid de cards */}
+      {/* Filtro por estado */}
+      <Tabs value={status} onValueChange={(v) => v && setStatus(v as StatusFilter)}>
+        <TabsList>
+          <TabsTrigger value="all">Todos</TabsTrigger>
+          <TabsTrigger value="active">Activos</TabsTrigger>
+          <TabsTrigger value="finalized">Finalizados</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {/* Lista */}
       {isLoading && (
-        <Card>
-          <CardContent className="flex items-center justify-center py-16">
-            <p className="text-sm text-muted-foreground">Cargando viajes...</p>
-          </CardContent>
-        </Card>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-[68px] animate-pulse rounded-xl border bg-muted/40" />
+          ))}
+        </div>
       )}
 
       {isError && (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <p className="text-sm text-destructive">
-              Error al cargar viajes. Reintenta en unos segundos.
-            </p>
+          <CardContent className="py-12 text-center text-sm text-destructive">
+            Error al cargar viajes. Reintentá en unos segundos.
           </CardContent>
         </Card>
       )}
 
-      {!isLoading && !isError && trips?.length === 0 && (
+      {!isLoading && !isError && filtered.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <div className="rounded-full bg-muted p-4">
               <Plane className="size-8 text-muted-foreground" />
             </div>
             <h3 className="mt-5 text-lg font-semibold text-foreground">
-              Comenzá tu primer viaje
+              {query || status !== 'all'
+                ? 'Sin resultados'
+                : 'Comenzá tu primer viaje'}
             </h3>
             <p className="mt-2 max-w-sm text-center text-sm text-muted-foreground">
-              Creá un grupo, sumá integrantes y empezá a registrar gastos
-              compartidos con amigos.
+              {query || status !== 'all'
+                ? 'Probá con otro nombre o cambiá el filtro.'
+                : 'Creá un grupo, sumá integrantes y empezá a registrar gastos compartidos.'}
             </p>
-            <Button className="mt-6" onClick={() => setCreateOpen(true)}>
-              <Plus className="size-4" />
-              Crear viaje
-            </Button>
+            {!query && status === 'all' && (
+              <Button className="mt-6" onClick={() => setCreateOpen(true)}>
+                <Plus className="size-4" />
+                Crear viaje
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {!isLoading && !isError && trips && trips.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {trips.map((trip) => (
-            // Cada card es clickeable y navega al detalle del trip.
-            <Link key={trip.id} href={`/trips/${trip.id}`}>
-              <Card className="h-full cursor-pointer transition-colors hover:bg-muted/50">
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-foreground line-clamp-1">
-                      {trip.name}
-                    </h3>
-                    <TripStatusBadge status={trip.status} />
-                  </div>
-                  {trip.description && (
-                    <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                      {trip.description}
-                    </p>
-                  )}
-                  <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Users className="size-3.5" />
-                      {trip._count?.participations ?? 0}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Receipt className="size-3.5" />
-                      {trip._count?.expenses ?? 0}
-                    </div>
-                    <div className="ml-auto font-medium">
-                      {trip.baseCurrency}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+      {!isLoading && !isError && filtered.length > 0 && (
+        <StaggerList className="space-y-3">
+          {filtered.map((trip) => (
+            <StaggerItem key={trip.id}>
+              <TripRow trip={trip} currentUserId={me?.id} />
+            </StaggerItem>
           ))}
-        </div>
+        </StaggerList>
       )}
 
-      {/* Dialog de creacion (controlado por estado local) */}
       <TripFormDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
