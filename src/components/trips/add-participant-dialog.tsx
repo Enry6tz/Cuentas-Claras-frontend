@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { PersonAvatar } from '@/components/shared/ui-bits';
 import { searchUsers } from '@/lib/api/users';
+import { sendInvitation } from '@/lib/api/invitations';
 import { addParticipant, listParticipants } from '@/lib/api/participants';
 import type { UserPublic } from '@/types';
 
@@ -52,8 +53,10 @@ export function AddParticipantDialog({ tripId, open, onOpenChange }: AddParticip
   const memberIds = new Set(participants.map((p) => p.userId));
 
   const addMutation = useMutation({
-    mutationFn: (user: UserPublic) => addParticipant(tripId, user.id),
+    mutationFn: (user: UserPublic) => sendInvitation(tripId, user.id),
     onSuccess: () => {
+      toast.success('Invitación enviada');
+      queryClient.invalidateQueries({ queryKey: ['trips', tripId, 'invitations'] });
       toast.success('Integrante agregado');
       queryClient.invalidateQueries({ queryKey: ['trips', tripId, 'participants'] });
       queryClient.invalidateQueries({ queryKey: ['trips', tripId] });
@@ -62,12 +65,14 @@ export function AddParticipantDialog({ tripId, open, onOpenChange }: AddParticip
     onError: (err: unknown) => {
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 409) {
+        toast.error('El usuario ya es participante o ya fue invitado');
         toast.error('El usuario ya es integrante del viaje');
       } else if (status === 404) {
         toast.error('No se encontró ningún usuario con ese email');
       } else if (status === 400) {
         toast.error('El viaje está finalizado');
       } else {
+        toast.error('No se pudo enviar la invitación');
         toast.error('No se pudo agregar el integrante');
       }
     },
@@ -122,6 +127,22 @@ export function AddParticipantDialog({ tripId, open, onOpenChange }: AddParticip
                         <p className="truncate text-xs text-muted-foreground">{user.email}</p>
                       </div>
                     </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{user.name}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={addMutation.isPending}
+                    onClick={() => addMutation.mutate(user)}
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Invitar
+                  </Button>
+                </li>
+              ))}
                     {already ? (
                       <Badge variant="secondary" className="gap-1 text-muted-foreground">
                         <Check className="size-3.5" />

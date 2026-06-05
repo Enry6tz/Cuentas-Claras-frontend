@@ -18,6 +18,7 @@ export interface UserPublic {
 export type TripStatus = 'ACTIVE' | 'FINALIZED';
 export type ParticipationRole = 'CREATOR' | 'SUPERVISOR' | 'MEMBER';
 export type ExpenseSplitType = 'EQUAL' | 'EXACT' | 'PERCENT';
+export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED';
 
 export interface Participation {
   id: string;
@@ -108,6 +109,23 @@ export interface ActivityItem {
   tripName: string;
   tripId: string;
   date: string;
+}
+
+export interface Invitation {
+  id: string;
+  tripId: string;
+  invitedId: string;
+  invitedBy: string;
+  status: InvitationStatus;
+  createdAt: string;
+  updatedAt: string;
+  invited?: UserPublic;
+  inviter?: UserPublic;
+  trip?: {
+    id: string;
+    name: string;
+    baseCurrency?: string;
+  };
 }
 
 // Todas las respuestas de la API vienen envueltas en { data: ... }
