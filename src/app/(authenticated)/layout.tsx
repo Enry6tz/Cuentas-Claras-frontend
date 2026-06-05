@@ -1,6 +1,7 @@
-import { Sidebar } from '@/components/layout/sidebar';
+import { AppSidebar } from '@/components/app-sidebar';
 import { TopBar } from '@/components/layout/top-bar';
 import { UserSync } from '@/components/auth/user-sync';
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
 export default function AuthenticatedLayout({
   children,
@@ -8,15 +9,13 @@ export default function AuthenticatedLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-screen">
+    <SidebarProvider>
       <UserSync />
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden overflow-y-auto bg-muted/50 ">
+      <AppSidebar />
+      <SidebarInset>
         <TopBar />
-        <main className="p-6 px-8">
-          {children}
-        </main>
-      </div>
-    </div>
+        <div className="flex-1 bg-muted/50 p-6">{children}</div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { ArrowRight, ArrowLeftRight, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { PersonAvatar } from '@/components/shared/ui-bits';
+import { DatePicker } from '@/components/shared/date-picker';
+import { cn } from '@/lib/utils';
 import { createPayment, type CreatePaymentPayload } from '@/lib/api/payments';
 import { getCurrencyRate } from '@/lib/api/currency';
 import type { Participation } from '@/types';
@@ -79,6 +83,8 @@ export function PaymentFormDialog({
     ? Math.round(amountNum * effectiveRate * 100) / 100
     : null;
 
+  const samePerson = !!debtorId && !!creditorId && debtorId === creditorId;
+
   const mutation = useMutation({
     mutationFn: (payload: CreatePaymentPayload) => createPayment(tripId, payload),
     onSuccess: () => {
@@ -124,73 +130,57 @@ export function PaymentFormDialog({
     });
   }
 
+  // Mapa value→label para que el trigger muestre el nombre (no el UUID) aun con el popup cerrado.
+  const personItems = participations.map((p) => ({
+    value: p.userId,
+    label: (
+      <span className="flex items-center gap-2">
+        <PersonAvatar name={p.user?.name ?? 'Sin nombre'} seed={p.userId} className="size-6" />
+        {p.user?.name ?? 'Sin nombre'}
+      </span>
+    ),
+  }));
+
   return (
     <Dialog key={open ? 'open' : 'closed'} open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Registrar pago</DialogTitle>
           <DialogDescription>
-            Registrá una transferencia entre participantes para saldar una deuda.
+            Los pagos se registran en moneda base ({baseCurrency}). El deudor le transfiere al
+            acreedor.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
-          <div className="grid gap-2">
-            <Label>Deudor (quién paga)</Label>
-            <Select value={debtorId} onValueChange={(v) => setDebtorId(v ?? '')}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar..." />
-              </SelectTrigger>
-              <SelectContent>
-                {participations.map((p) => (
-                  <SelectItem key={p.userId} value={p.userId}>
-                    {p.user?.name ?? 'Sin nombre'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid gap-2">
-            <Label>Acreedor (quién recibe)</Label>
-            <Select value={creditorId} onValueChange={(v) => setCreditorId(v ?? '')}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar..." />
-              </SelectTrigger>
-              <SelectContent>
-                {participations.map((p) => (
-                  <SelectItem key={p.userId} value={p.userId}>
-                    {p.user?.name ?? 'Sin nombre'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+          {/* Deudor → Acreedor */}
+          <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
             <div className="grid gap-2">
-              <Label htmlFor="amount">Monto *</Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="100"
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="currency">Moneda</Label>
-              <Select value={currency} onValueChange={(v) => setCurrency(v ?? baseCurrency)}>
-                <SelectTrigger>
-                  <SelectValue />
+              <Label>Deudor</Label>
+              <Select items={personItems} value={debtorId} onValueChange={(v) => setDebtorId(v ?? '')}>
+                <SelectTrigger className={cn('w-full', samePerson && 'border-destructive ring-destructive/20')}>
+                  <SelectValue placeholder="Seleccionar..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {CURRENCIES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
+                  {participations.map((p) => (
+                    <SelectItem key={p.userId} value={p.userId}>
+                      {p.user?.name ?? 'Sin nombre'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <ArrowRight className="mb-2 size-4 text-muted-foreground" />
+            <div className="grid gap-2">
+              <Label>Acreedor</Label>
+              <Select items={personItems} value={creditorId} onValueChange={(v) => setCreditorId(v ?? '')}>
+                <SelectTrigger className={cn('w-full', samePerson && 'border-destructive ring-destructive/20')}>
+                  <SelectValue placeholder="Seleccionar..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {participations.map((p) => (
+                    <SelectItem key={p.userId} value={p.userId}>
+                      {p.user?.name ?? 'Sin nombre'}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -198,85 +188,113 @@ export function PaymentFormDialog({
             </div>
           </div>
 
-          {currency !== baseCurrency && (
+          {samePerson && (
+            <p className="-mt-2 flex items-center gap-1.5 text-sm text-destructive">
+              <X className="size-4" />
+              El deudor y el acreedor deben ser distintos.
+            </p>
+          )}
+
+          {/* Monto + Moneda + Fecha */}
+          <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
-              <Label htmlFor="manualRate">
-                Tasa de cambio manual (opcional, si la API falla)
-              </Label>
-              <Input
-                id="manualRate"
-                type="number"
-                step="0.000001"
-                value={manualRate}
-                onChange={(e) => setManualRate(e.target.value)}
-                placeholder={`1 ${currency} = ? ${baseCurrency}`}
-              />
-              <p className="text-xs text-muted-foreground">
-                Si no se ingresa, se obtiene automáticamente de la API.
-              </p>
+              <Label htmlFor="amount">Monto</Label>
+              <div className="flex items-center gap-2">
+                <Select value={currency} onValueChange={(v) => setCurrency(v ?? baseCurrency)}>
+                  <SelectTrigger className="w-[4.5rem] shrink-0">
+                    <span>{currency}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  id="amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0,00"
+                  className="text-right"
+                  required
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="date">Fecha</Label>
+              <DatePicker id="date" value={date} onChange={setDate} />
+            </div>
+          </div>
 
-              {effectiveRate && (
-                <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
-                  {rateLoading && (
-                    <p className="text-muted-foreground">Obteniendo cotización...</p>
-                  )}
-                  {apiRate && (
-                    <p className="font-medium">
-                      1 {currency} = {apiRate.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} {baseCurrency}
+          {/* Preview de conversión (si la moneda difiere de la base) */}
+          {currency !== baseCurrency && (
+            <div className="space-y-2">
+              {effectiveRate ? (
+                <div className="flex items-start gap-2 rounded-lg border border-primary/10 bg-primary/5 p-3">
+                  <ArrowLeftRight className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <div className="space-y-0.5">
+                    <p className="text-sm">
+                      <span className="font-medium">{fmt(amountNum, currency)}</span>{' '}
+                      {baseEquivalent !== null && (
+                        <span className="text-primary">→ {fmt(baseEquivalent, baseCurrency)}</span>
+                      )}
                     </p>
-                  )}
-                  {manualRateNum && apiRate && apiRate !== manualRateNum && (
                     <p className="text-xs text-muted-foreground">
-                      Usando tasa manual. API: 1 {currency} = {apiRate.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} {baseCurrency}
+                      Tasa de cambio: 1 {currency} ={' '}
+                      {effectiveRate.toLocaleString('es-AR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 6,
+                      })}{' '}
+                      {baseCurrency}.
                     </p>
-                  )}
-                  {amountNum > 0 && baseEquivalent !== null && (
-                    <p>
-                      {fmt(amountNum, currency)} → {fmt(baseEquivalent, baseCurrency)}
-                    </p>
-                  )}
+                  </div>
                 </div>
+              ) : (
+                !rateLoading && (
+                  <p className="text-xs text-destructive">
+                    Cotización no disponible. Ingresá una tasa manual o intentá de nuevo.
+                  </p>
+                )
               )}
-
-              {!effectiveRate && !rateLoading && currency !== baseCurrency && (
-                <p className="text-xs text-destructive">
-                  Cotización no disponible. Ingresá una tasa manual o intentá de nuevo.
-                </p>
-              )}
+              <div className="grid gap-1.5">
+                <Label htmlFor="manualRate" className="text-xs text-muted-foreground">
+                  Tasa manual (opcional, si la API falla)
+                </Label>
+                <Input
+                  id="manualRate"
+                  type="number"
+                  step="0.000001"
+                  value={manualRate}
+                  onChange={(e) => setManualRate(e.target.value)}
+                  placeholder={`1 ${currency} = ? ${baseCurrency}`}
+                />
+              </div>
             </div>
           )}
 
+          {/* Nota */}
           <div className="grid gap-2">
-            <Label htmlFor="date">Fecha</Label>
-            <Input
-              id="date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="note">Nota</Label>
+            <Label htmlFor="note">Nota (opcional)</Label>
             <Textarea
               id="note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Pago de la cena"
-              rows={2}
+              placeholder="Ej: Parte del hotel, transferencia por Mercado Pago…"
+              rows={3}
             />
           </div>
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={mutation.isPending}
-          >
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={mutation.isPending}>
+          <Button onClick={handleSubmit} disabled={mutation.isPending || samePerson}>
             {mutation.isPending ? 'Registrando...' : 'Registrar pago'}
           </Button>
         </DialogFooter>

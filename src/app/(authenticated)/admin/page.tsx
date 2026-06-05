@@ -1,11 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/nextjs';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Users, Receipt } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import {
+  Pencil,
+  Trash2,
+  Plane,
+  Users,
+  Receipt,
+  Globe,
+  Lock,
+  ShieldCheck,
+  PlusCircle,
+} from 'lucide-react';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -24,6 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { TripStatusBadge } from '@/components/shared/ui-bits';
 import { TripFormDialog } from '@/components/trips/trip-form-dialog';
 import { listAdminTrips, updateAdminTrip, deleteAdminTrip } from '@/lib/api/admin';
 import type { Trip } from '@/types';
@@ -32,6 +43,7 @@ export default function AdminPage() {
   const { user } = useUser();
   const queryClient = useQueryClient();
 
+  const [createOpen, setCreateOpen] = useState(false);
   const [editTrip, setEditTrip] = useState<Trip | null>(null);
   const [deleteTrip, setDeleteTrip] = useState<Trip | null>(null);
 
@@ -58,14 +70,19 @@ export default function AdminPage() {
     },
   });
 
-  const formatDate = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleDateString('es-AR') : '—';
+  const totals = useMemo(() => {
+    const list = trips ?? [];
+    return {
+      trips: list.length,
+      expenses: list.reduce((s, t) => s + (t._count?.expenses ?? 0), 0),
+    };
+  }, [trips]);
 
   if (!isAdmin) {
     return (
       <div className="flex items-center justify-center py-24">
         <Card>
-          <CardContent className="py-12 px-16 text-center">
+          <CardContent className="px-16 py-12 text-center">
             <p className="text-lg font-semibold text-destructive">Acceso denegado</p>
             <p className="mt-2 text-sm text-muted-foreground">
               No tenés permisos de administrador.
@@ -78,99 +95,116 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Panel de administrador</h1>
-        <p className="text-sm text-muted-foreground">
-          Todos los viajes del sistema. Podés editar o eliminar cualquiera.
-        </p>
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold text-foreground">
+              Hola, {user?.firstName ?? 'admin'}
+            </h1>
+            <Badge className="gap-1">
+              <ShieldCheck className="size-3.5" />
+              Administrador
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Esto es lo que viene pasando en tus viajes.
+          </p>
+          <div className="flex items-center gap-2 pt-0.5">
+            <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <Globe className="size-4" />
+              Vista general
+            </span>
+            <Badge variant="secondary" className="gap-1 text-muted-foreground">
+              <Lock className="size-3" />
+              Solo lectura
+            </Badge>
+          </div>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>
+          <PlusCircle className="size-4" />
+          Crear viaje
+        </Button>
       </div>
 
-      {isLoading && (
-        <Card>
-          <CardContent className="flex items-center justify-center py-16">
-            <p className="text-sm text-muted-foreground">Cargando viajes...</p>
-          </CardContent>
-        </Card>
-      )}
+      {/* Stat cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <AdminStat label="Viajes totales" value={isLoading ? '—' : totals.trips} icon={<Plane className="size-4" />} />
+        <AdminStat label="Usuarios" value="—" icon={<Users className="size-4" />} />
+        <AdminStat label="Gastos registrados" value={isLoading ? '—' : totals.expenses} icon={<Receipt className="size-4" />} />
+        <AdminStat label="Volumen total" value="—" icon={<Globe className="size-4" />} />
+      </div>
 
-      {isError && (
-        <Card>
-          <CardContent className="flex items-center justify-center py-16">
-            <p className="text-sm text-destructive">
-              Error al cargar los viajes. Reintentá en unos segundos.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader className="space-y-0.5">
+          <p className="text-base font-semibold text-foreground">Últimos viajes del sistema</p>
+          <p className="text-xs text-muted-foreground">Monitoreo global — sin acciones destructivas.</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoading && (
+            <div className="flex items-center justify-center py-16">
+              <p className="text-sm text-muted-foreground">Cargando viajes...</p>
+            </div>
+          )}
 
-      {!isLoading && !isError && trips && (
-        <Card>
-          <CardContent className="p-0">
+          {isError && (
+            <div className="flex items-center justify-center py-16">
+              <p className="text-sm text-destructive">
+                Error al cargar los viajes. Reintentá en unos segundos.
+              </p>
+            </div>
+          )}
+
+          {!isLoading && !isError && trips && (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre</TableHead>
+                  <TableHead className="px-4">Viaje</TableHead>
+                  <TableHead>Creador</TableHead>
+                  <TableHead className="text-center">Integrantes</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead>Moneda</TableHead>
-                  <TableHead>Fechas</TableHead>
-                  <TableHead className="text-center">
-                    <Users className="inline h-4 w-4" />
-                  </TableHead>
-                  <TableHead className="text-center">
-                    <Receipt className="inline h-4 w-4" />
-                  </TableHead>
-                  <TableHead />
+                  <TableHead className="px-4 text-right" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {trips.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
                       No hay viajes en el sistema.
                     </TableCell>
                   </TableRow>
                 )}
                 {trips.map((trip) => (
                   <TableRow key={trip.id}>
-                    <TableCell>
-                      <div className="font-medium">{trip.name}</div>
+                    <TableCell className="px-4">
+                      <div className="font-medium text-foreground">{trip.name}</div>
                       {trip.description && (
                         <div className="text-xs text-muted-foreground line-clamp-1">
                           {trip.description}
                         </div>
                       )}
                     </TableCell>
-                    <TableCell>
-                      <Badge variant={trip.status === 'ACTIVE' ? 'default' : 'secondary'}>
-                        {trip.status === 'ACTIVE' ? 'Activo' : 'Finalizado'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{trip.baseCurrency}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(trip.startDate)} → {formatDate(trip.endDate)}
+                      {trip.participations?.find((p) => p.role === 'CREATOR')?.user?.name ?? '—'}
                     </TableCell>
-                    <TableCell className="text-center text-sm">
+                    <TableCell className="text-center text-sm tabular-nums">
                       {trip._count?.participations ?? 0}
                     </TableCell>
-                    <TableCell className="text-center text-sm">
-                      {trip._count?.expenses ?? 0}
-                    </TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditTrip(trip)}
-                        >
-                          <Pencil className="h-4 w-4" />
+                      <TripStatusBadge status={trip.status} />
+                    </TableCell>
+                    <TableCell className="px-4">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon-sm" onClick={() => setEditTrip(trip)}>
+                          <Pencil className="size-4" />
                         </Button>
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="icon-sm"
                           onClick={() => setDeleteTrip(trip)}
                           className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="size-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -178,14 +212,18 @@ export default function AdminPage() {
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
+
+      <TripFormDialog open={createOpen} onOpenChange={setCreateOpen} />
 
       {editTrip && (
         <TripFormDialog
           open={!!editTrip}
-          onOpenChange={(open) => { if (!open) setEditTrip(null); }}
+          onOpenChange={(open) => {
+            if (!open) setEditTrip(null);
+          }}
           trip={editTrip}
           updateFn={updateAdminTrip}
         />
@@ -219,5 +257,28 @@ export default function AdminPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function AdminStat({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: React.ReactNode;
+  icon: React.ReactNode;
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <div className="h-1 bg-primary" />
+      <CardHeader className="flex-row items-start justify-between gap-2 pb-1">
+        <p className="text-xs leading-tight text-muted-foreground">{label}</p>
+        <div className="rounded-lg bg-primary/10 p-2 text-primary">{icon}</div>
+      </CardHeader>
+      <CardContent>
+        <p className="text-3xl font-bold tabular-nums">{value}</p>
+      </CardContent>
+    </Card>
   );
 }

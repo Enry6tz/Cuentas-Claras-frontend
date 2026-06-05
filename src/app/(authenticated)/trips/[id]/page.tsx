@@ -11,9 +11,13 @@ import {
   ArrowLeftRight,
   BarChart3,
   Calendar,
-  Crown,
-  Edit,
-  Eye,
+  Coins,
+  Users,
+  Receipt,
+  CreditCard,
+  Scale,
+  Pencil,
+  Trash2,
   Plus,
   Receipt,
   Trash2,
@@ -33,7 +37,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { AddParticipantDialog } from '@/components/trips/add-participant-dialog';
+import { TripStatusBadge } from '@/components/shared/ui-bits';
 import { TripFormDialog } from '@/components/trips/trip-form-dialog';
 import { ExpenseList } from '@/components/expenses/expense-list';
 import { ExpenseFormDialog } from '@/components/expenses/expense-form-dialog';
@@ -43,15 +47,17 @@ import { BalanceSummary } from '@/components/balances/balance-summary';
 import { SettlementSuggestions } from '@/components/balances/settlement-suggestions';
 import { getTrip, deleteTrip } from '@/lib/api/trips';
 import { getMe } from '@/lib/api/users';
-import type { ParticipationRole } from '@/types';
 
-const roleConfig: Record<
-  ParticipationRole,
-  { label: string; icon: typeof Crown; variant: 'default' | 'secondary' | 'outline' }
-> = {
-  CREATOR: { label: 'Creador', icon: Crown, variant: 'default' },
-  SUPERVISOR: { label: 'Supervisor', icon: Eye, variant: 'secondary' },
-  MEMBER: { label: 'Miembro', icon: UserIcon, variant: 'outline' },
+const CURRENCY_NAMES: Record<string, string> = {
+  ARS: 'Peso argentino',
+  USD: 'Dólar estadounidense',
+  EUR: 'Euro',
+  BRL: 'Real brasileño',
+  CLP: 'Peso chileno',
+  UYU: 'Peso uruguayo',
+  BOB: 'Boliviano',
+  COP: 'Peso colombiano',
+  MXN: 'Peso mexicano',
 };
 
 interface TripDetailPageProps {
@@ -67,8 +73,7 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [expenseFormOpen, setExpenseFormOpen] = useState(false);
   const [paymentFormOpen, setPaymentFormOpen] = useState(false);
-  const [addParticipantOpen, setAddParticipantOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('info');
+  const [activeTab, setActiveTab] = useState('participants');
   const { user: clerkUser } = useUser();
 
   const { data: trip, isLoading, isError } = useQuery({
@@ -100,9 +105,7 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
   const currentUserId = useMemo(() => {
     const clerkEmail = clerkUser?.primaryEmailAddress?.emailAddress;
     if (!clerkEmail || !trip?.participations) return '';
-    const match = trip.participations.find(
-      (p) => p.user?.email === clerkEmail,
-    );
+    const match = trip.participations.find((p) => p.user?.email === clerkEmail);
     return match?.userId ?? '';
   }, [clerkUser, trip]);
 
@@ -119,7 +122,7 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
       <div className="space-y-4">
         <Link href="/trips">
           <Button variant="ghost" size="sm">
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="size-4" />
             Volver a viajes
           </Button>
         </Link>
@@ -135,47 +138,40 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
   }
 
   const formatDate = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleDateString('es-AR') : '—';
+    iso
+      ? new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })
+      : '—';
 
-  const myParticipation = trip.participations?.find(
-    (p) => p.userId === currentUserId,
-  );
+  const myParticipation = trip.participations?.find((p) => p.userId === currentUserId);
   const isCreator = myParticipation?.role === 'CREATOR';
   const isSupervisor = myParticipation?.role === 'SUPERVISOR';
+  const participantCount = trip.participations?.length ?? 0;
+  const expenseCount = trip._count?.expenses ?? 0;
 
   return (
     <div className="space-y-6">
       <Link href="/trips">
-        <Button variant="ghost" size="sm">
-          <ArrowLeft className="h-4 w-4" />
+        <Button variant="ghost" size="sm" className="text-muted-foreground">
+          <ArrowLeft className="size-4" />
           Volver a viajes
         </Button>
       </Link>
 
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold text-foreground">{trip.name}</h1>
-            {trip.status === 'ACTIVE' ? (
-              <Badge variant="secondary" className="gap-1.5 bg-success/10 text-success border-transparent">
-                <span className="size-1.5 rounded-full bg-success" />
-                En curso
-              </Badge>
-            ) : (
-              <Badge variant="secondary" className="gap-1.5 text-muted-foreground">
-                <span className="size-1.5 rounded-full bg-muted-foreground" />
-                Finalizado
-              </Badge>
-            )}
+            <TripStatusBadge status={trip.status} />
           </div>
           {trip.description && (
-            <p className="mt-1 text-sm text-muted-foreground">{trip.description}</p>
+            <p className="text-sm text-muted-foreground">{trip.description}</p>
           )}
         </div>
         {isCreator && (
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} className="gap-1">
-              <Edit className="h-4 w-4" />
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil className="size-4" />
               Editar
             </Button>
             <Button
@@ -184,172 +180,105 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
               onClick={() => setDeleteOpen(true)}
               className="gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="size-4" />
               Eliminar
             </Button>
           </div>
         )}
       </div>
 
-      {/* Info cards row */}
+      {/* Info row */}
       <Card>
-        <CardContent className="p-0">
-          <div className="grid sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x">
-            <div className="px-6 py-4">
-              <p className="text-xs font-medium text-muted-foreground">Fechas</p>
-              <div className="mt-1 flex items-center gap-2 text-sm text-foreground">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                {formatDate(trip.startDate)} → {formatDate(trip.endDate)}
-              </div>
-            </div>
-            <div className="px-6 py-4">
-              <p className="text-xs font-medium text-muted-foreground">Moneda base</p>
-              <p className="mt-1 text-lg font-bold text-foreground">{trip.baseCurrency}</p>
-            </div>
-            <div className="px-6 py-4">
-              <p className="text-xs font-medium text-muted-foreground">Integrantes</p>
-              <p className="mt-1 text-lg font-bold text-foreground">
-                {trip.participations?.length ?? 0}
-              </p>
-            </div>
+        <CardContent className="grid gap-4 p-0 sm:grid-cols-3 sm:divide-x">
+          <div className="space-y-1 px-5 py-4">
+            <p className="text-xs font-medium text-muted-foreground">Fechas</p>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <Calendar className="size-4 text-muted-foreground" />
+              {formatDate(trip.startDate)} – {formatDate(trip.endDate)}
+            </p>
+          </div>
+          <div className="space-y-1 px-5 py-4">
+            <p className="text-xs font-medium text-muted-foreground">Moneda base</p>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <Coins className="size-4 text-muted-foreground" />
+              {trip.baseCurrency}
+              {CURRENCY_NAMES[trip.baseCurrency] && (
+                <span className="font-normal text-muted-foreground">
+                  · {CURRENCY_NAMES[trip.baseCurrency]}
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="space-y-1 px-5 py-4">
+            <p className="text-xs font-medium text-muted-foreground">Integrantes</p>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <Users className="size-4 text-muted-foreground" />
+              {participantCount} {participantCount === 1 ? 'persona' : 'personas'}
+            </p>
           </div>
         </CardContent>
       </Card>
 
+      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList variant="line">
-          <TabsTrigger value="info" className="gap-1.5">
-            <Users className="h-4 w-4" />
+        <TabsList variant="line" className="w-full justify-start gap-4 border-b">
+          <TabsTrigger value="participants">
+            <Users className="size-4" />
             Integrantes
-            <span className="ml-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
-              {trip.participations?.length ?? 0}
-            </span>
+            <TabCount active={activeTab === 'participants'}>{participantCount}</TabCount>
           </TabsTrigger>
-          <TabsTrigger value="expenses" className="gap-1.5">
-            <Receipt className="h-4 w-4" />
+          <TabsTrigger value="expenses">
+            <Receipt className="size-4" />
             Gastos
+            <TabCount active={activeTab === 'expenses'}>{expenseCount}</TabCount>
           </TabsTrigger>
-          <TabsTrigger value="payments" className="gap-1.5">
-            <ArrowLeftRight className="h-4 w-4" />
+          <TabsTrigger value="payments">
+            <CreditCard className="size-4" />
             Pagos
           </TabsTrigger>
-          <TabsTrigger value="balances" className="gap-1.5">
-            <BarChart3 className="h-4 w-4" />
+          <TabsTrigger value="balances">
+            <Scale className="size-4" />
             Balances
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="info" className="mt-4">
-          <Card>
-            <CardHeader>
-              <div>
-                <CardTitle className="text-base">Integrantes</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  {trip.participations?.length ?? 0} personas en este viaje
-                </p>
-              </div>
-              <CardAction>
-                <Button size="sm" variant="outline" className="gap-1" onClick={() => setAddParticipantOpen(true)}>
-                  <UserPlus className="h-4 w-4" />
-                  Agregar
-                </Button>
-              </CardAction>
-            </CardHeader>
-            <CardContent>
-              {trip.participations && trip.participations.length > 0 ? (
-                <div className="rounded-lg border">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b text-xs text-muted-foreground">
-                        <th className="px-4 py-3 text-left font-medium">Integrante</th>
-                        <th className="px-4 py-3 text-left font-medium">Rol</th>
-                        <th className="px-4 py-3 text-right font-medium">Saldo</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {trip.participations.map((p) => {
-                        const RoleIcon = roleConfig[p.role].icon;
-                        const isCurrentUser = p.userId === currentUserId;
-                        return (
-                          <tr key={p.id}>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-3">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-                                  {p.user?.name?.charAt(0).toUpperCase() ?? '?'}
-                                </div>
-                                <div>
-                                  <p className="text-sm font-medium text-foreground">
-                                    {p.user?.name ?? 'Sin nombre'}
-                                    {isCurrentUser && (
-                                      <span className="ml-1.5 text-xs text-muted-foreground">· vos</span>
-                                    )}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {p.user?.email}
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <Badge variant={p.role === 'CREATOR' ? 'default' : p.role === 'SUPERVISOR' ? 'secondary' : 'outline'} className="gap-1">
-                                <RoleIcon className="h-3.5 w-3.5" />
-                                {roleConfig[p.role].label}
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              {p.currentBalance ? (() => {
-                                const balance = parseFloat(p.currentBalance);
-                                const isPositive = balance > 0;
-                                const isNegative = balance < 0;
-                                return (
-                                  <span className={`text-sm font-medium tabular-nums ${
-                                    isPositive ? 'text-success' : isNegative ? 'text-destructive' : 'text-muted-foreground'
-                                  }`}>
-                                    {isPositive ? '+' : ''}{p.currentBalance}
-                                  </span>
-                                );
-                              })() : (
-                                <span className="text-sm text-muted-foreground">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Sin participantes.</p>
-              )}
-            </CardContent>
-          </Card>
+        <TabsContent value="participants" className="mt-4">
+          {currentUser ? (
+            <ParticipantsList tripId={id} currentUserId={currentUser.id} />
+          ) : (
+            <Card>
+              <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+                <Users className="size-4" />
+                Cargando integrantes...
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="expenses" className="mt-4">
           <Card>
-            <CardHeader>
-              <div>
-                <CardTitle className="text-base">Gastos</CardTitle>
+            <CardHeader className="flex-row items-start justify-between gap-2">
+              <div className="space-y-0.5">
+                <CardTitle className="text-base font-semibold">Gastos del viaje</CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  Gastos registrados en este viaje
+                  {expenseCount} {expenseCount === 1 ? 'gasto registrado' : 'gastos registrados'}
                 </p>
               </div>
-              <CardAction>
-                {!isSupervisor && (
-                  <Button size="sm" onClick={() => setExpenseFormOpen(true)}>
-                    <Plus className="h-4 w-4" />
-                    Nuevo gasto
-                  </Button>
-                )}
-              </CardAction>
+              {!isSupervisor && (
+                <Button size="sm" onClick={() => setExpenseFormOpen(true)}>
+                  <Plus className="size-4" />
+                  Nuevo gasto
+                </Button>
+              )}
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <ExpenseList
                 tripId={id}
                 participations={trip.participations ?? []}
                 currentUserId={currentUserId}
                 isSupervisor={isSupervisor}
                 isCreator={isCreator}
+                baseCurrency={trip.baseCurrency}
               />
             </CardContent>
           </Card>
@@ -357,28 +286,27 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
 
         <TabsContent value="payments" className="mt-4">
           <Card>
-            <CardHeader>
-              <div>
-                <CardTitle className="text-base">Pagos</CardTitle>
+            <CardHeader className="flex-row items-start justify-between gap-2">
+              <div className="space-y-0.5">
+                <CardTitle className="text-base font-semibold">Pagos</CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  Transferencias entre integrantes para saldar deudas
+                  Transferencias entre integrantes para saldar deudas.
                 </p>
               </div>
-              <CardAction>
-                {!isSupervisor && (
-                  <Button size="sm" onClick={() => setPaymentFormOpen(true)}>
-                    <Plus className="h-4 w-4" />
-                    Registrar pago
-                  </Button>
-                )}
-              </CardAction>
+              {!isSupervisor && (
+                <Button size="sm" onClick={() => setPaymentFormOpen(true)}>
+                  <Plus className="size-4" />
+                  Registrar pago
+                </Button>
+              )}
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <PaymentList
                 tripId={id}
                 currentUserId={currentUserId}
                 isSupervisor={isSupervisor}
                 isCreator={isCreator}
+                baseCurrency={trip.baseCurrency}
               />
             </CardContent>
           </Card>
@@ -387,26 +315,22 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
         <TabsContent value="balances" className="mt-4">
           <div className="space-y-6">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Saldos por integrante</CardTitle>
+              <CardHeader className="space-y-0.5">
+                <CardTitle className="text-base font-semibold">Saldos por integrante</CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  Quién le debe a quién en {trip.baseCurrency}
+                  Cuánto le deben o cuánto debe cada uno al cierre actual.
                 </p>
               </CardHeader>
               <CardContent>
-                <BalanceSummary
-                  tripId={id}
-                />
+                <BalanceSummary tripId={id} baseCurrency={trip.baseCurrency} />
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  Liquidación sugerida
-                </CardTitle>
+              <CardHeader className="space-y-0.5">
+                <CardTitle className="text-base font-semibold">Liquidación sugerida</CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  Transferencias mínimas para dejar todos los saldos en cero
+                  La forma más simple de saldar todas las deudas con la menor cantidad de pagos.
                 </p>
               </CardHeader>
               <CardContent>
@@ -421,11 +345,7 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
         </TabsContent>
       </Tabs>
 
-      <TripFormDialog
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        trip={trip}
-      />
+      <TripFormDialog open={editOpen} onOpenChange={setEditOpen} trip={trip} />
 
       <ExpenseFormDialog
         open={expenseFormOpen}
@@ -477,5 +397,18 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function TabCount({ active, children }: { active: boolean; children: React.ReactNode }) {
+  return (
+    <Badge
+      variant="secondary"
+      className={
+        active ? 'bg-primary/10 text-primary border-transparent' : 'text-muted-foreground'
+      }
+    >
+      {children}
+    </Badge>
   );
 }
