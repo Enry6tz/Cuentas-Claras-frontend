@@ -8,6 +8,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
+  ArrowLeftRight,
+  BarChart3,
   Calendar,
   Coins,
   Users,
@@ -17,8 +19,13 @@ import {
   Pencil,
   Trash2,
   Plus,
+  Receipt,
+  Trash2,
+  User as UserIcon,
+  UserPlus,
+  Users,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardAction } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -38,7 +45,6 @@ import { PaymentList } from '@/components/payments/payment-list';
 import { PaymentFormDialog } from '@/components/payments/payment-form-dialog';
 import { BalanceSummary } from '@/components/balances/balance-summary';
 import { SettlementSuggestions } from '@/components/balances/settlement-suggestions';
-import { ParticipantsList } from '@/components/trips/participants-list';
 import { getTrip, deleteTrip } from '@/lib/api/trips';
 import { getMe } from '@/lib/api/users';
 
@@ -172,7 +178,7 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
               variant="outline"
               size="sm"
               onClick={() => setDeleteOpen(true)}
-              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 className="size-4" />
               Eliminar
@@ -355,6 +361,12 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
         tripId={id}
         participations={trip.participations ?? []}
         baseCurrency={trip.baseCurrency}
+      />
+
+      <AddParticipantDialog
+        tripId={id}
+        open={addParticipantOpen}
+        onOpenChange={setAddParticipantOpen}
       />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>

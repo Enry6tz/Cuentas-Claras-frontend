@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { PersonAvatar } from '@/components/shared/ui-bits';
 import { getSettlement } from '@/lib/api/balances';
 import { PaymentFormDialog } from '@/components/payments/payment-form-dialog';
+import { avatarColor, initials } from '@/lib/utils';
 import type { Participation } from '@/types';
 
 interface SettlementSuggestionsProps {
@@ -76,6 +77,7 @@ export function SettlementSuggestions({
                     amount: s.amount,
                   })
                 }
+                className="gap-1"
               >
                 <ArrowLeftRight className="size-4" />
                 Registrar pago

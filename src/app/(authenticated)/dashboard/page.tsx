@@ -12,6 +12,9 @@ import {
   Users,
   ChevronRight,
   Activity,
+  BarChart3,
+  Clock,
+  CreditCard,
   DollarSign,
   UserRound,
 } from 'lucide-react';
