@@ -1,9 +1,9 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUp, ArrowDown } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { TrendingDown, TrendingUp } from 'lucide-react';
 import { getBalances } from '@/lib/api/balances';
+import { avatarColor, initials } from '@/lib/utils';
 interface BalanceSummaryProps {
   tripId: string;
 }
@@ -27,7 +27,7 @@ export function BalanceSummary({ tripId }: BalanceSummaryProps) {
   }
 
   return (
-    <div className="grid gap-2">
+    <div className="divide-y rounded-lg border">
       {balances.map((entry) => {
         const balanceNum = parseFloat(entry.balance);
         const isPositive = balanceNum > 0;
@@ -37,23 +37,19 @@ export function BalanceSummary({ tripId }: BalanceSummaryProps) {
         return (
           <div
             key={entry.userId}
-            className="flex items-center justify-between rounded-lg border px-4 py-3"
+            className="flex items-center justify-between px-4 py-3"
           >
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-                {entry.userName.charAt(0).toUpperCase()}
+              <div className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-white ${avatarColor(entry.userId || entry.userName)}`}>
+                {initials(entry.userName)}
               </div>
               <div>
-                <p className="text-sm font-medium">{entry.userName}</p>
+                <p className="text-sm font-medium text-foreground">{entry.userName}</p>
                 {isPositive && (
-                  <p className="text-xs text-green-600">
-                    Le deben {entry.balance}
-                  </p>
+                  <p className="text-xs text-success">Le deben</p>
                 )}
                 {isNegative && (
-                  <p className="text-xs text-red-600">
-                    Debe {entry.balance.replace('-', '')}
-                  </p>
+                  <p className="text-xs text-destructive">Debe</p>
                 )}
                 {isSettled && (
                   <p className="text-xs text-muted-foreground">En cero</p>
@@ -62,19 +58,19 @@ export function BalanceSummary({ tripId }: BalanceSummaryProps) {
             </div>
             <div className="flex items-center gap-2">
               {isPositive && (
-                <Badge variant="default" className="bg-green-600">
-                  <ArrowUp className="h-3 w-3 mr-1" />
+                <span className="flex items-center gap-1 text-sm font-semibold text-success tabular-nums">
+                  <TrendingUp className="h-4 w-4" />
                   +{entry.balance}
-                </Badge>
+                </span>
               )}
               {isNegative && (
-                <Badge variant="destructive">
-                  <ArrowDown className="h-3 w-3 mr-1" />
+                <span className="flex items-center gap-1 text-sm font-semibold text-destructive tabular-nums">
+                  <TrendingDown className="h-4 w-4" />
                   {entry.balance}
-                </Badge>
+                </span>
               )}
               {isSettled && (
-                <Badge variant="outline">$0.00</Badge>
+                <span className="text-sm text-muted-foreground tabular-nums">$0.00</span>
               )}
             </div>
           </div>
