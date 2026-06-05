@@ -3,18 +3,22 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { UserPlus, Search, Loader2 } from 'lucide-react';
+import { Plus, Search, Loader2, Check } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { PersonAvatar } from '@/components/shared/ui-bits';
 import { searchUsers } from '@/lib/api/users';
 import { sendInvitation } from '@/lib/api/invitations';
+import { addParticipant, listParticipants } from '@/lib/api/participants';
 import type { UserPublic } from '@/types';
 
 interface AddParticipantDialogProps {
@@ -40,25 +44,36 @@ export function AddParticipantDialog({ tripId, open, onOpenChange }: AddParticip
     staleTime: 30_000,
   });
 
+  // Reusa el cache de participantes para marcar quién ya está en el viaje.
+  const { data: participants = [] } = useQuery({
+    queryKey: ['trips', tripId, 'participants'],
+    queryFn: () => listParticipants(tripId),
+    enabled: open,
+  });
+  const memberIds = new Set(participants.map((p) => p.userId));
+
   const addMutation = useMutation({
     mutationFn: (user: UserPublic) => sendInvitation(tripId, user.id),
     onSuccess: () => {
       toast.success('Invitación enviada');
       queryClient.invalidateQueries({ queryKey: ['trips', tripId, 'invitations'] });
+      toast.success('Integrante agregado');
+      queryClient.invalidateQueries({ queryKey: ['trips', tripId, 'participants'] });
       queryClient.invalidateQueries({ queryKey: ['trips', tripId] });
-      onOpenChange(false);
       setQuery('');
     },
     onError: (err: unknown) => {
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 409) {
         toast.error('El usuario ya es participante o ya fue invitado');
+        toast.error('El usuario ya es integrante del viaje');
       } else if (status === 404) {
         toast.error('No se encontró ningún usuario con ese email');
       } else if (status === 400) {
         toast.error('El viaje está finalizado');
       } else {
         toast.error('No se pudo enviar la invitación');
+        toast.error('No se pudo agregar el integrante');
       }
     },
   });
@@ -72,24 +87,24 @@ export function AddParticipantDialog({ tripId, open, onOpenChange }: AddParticip
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Agregar participante</DialogTitle>
+          <DialogTitle>Agregar integrante</DialogTitle>
           <DialogDescription>
-            Buscá por nombre o email para invitar a alguien al viaje.
+            Sólo podés sumar usuarios ya registrados en Cuentas Claras.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Nombre o email..."
+              placeholder="Buscar por nombre o email…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="pl-9"
               autoFocus
             />
             {isFetching && (
-              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+              <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
             )}
           </div>
 
@@ -101,11 +116,16 @@ export function AddParticipantDialog({ tripId, open, onOpenChange }: AddParticip
 
           {results.length > 0 && (
             <ul className="divide-y rounded-lg border">
-              {results.map((user) => (
-                <li key={user.id} className="flex items-center justify-between px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-                      {user.name?.charAt(0).toUpperCase() ?? '?'}
+              {results.map((user) => {
+                const already = memberIds.has(user.id);
+                return (
+                  <li key={user.id} className="flex items-center justify-between gap-2 px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <PersonAvatar name={user.name} seed={user.id} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">{user.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                      </div>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground">{user.name}</p>
@@ -123,6 +143,25 @@ export function AddParticipantDialog({ tripId, open, onOpenChange }: AddParticip
                   </Button>
                 </li>
               ))}
+                    {already ? (
+                      <Badge variant="secondary" className="gap-1 text-muted-foreground">
+                        <Check className="size-3.5" />
+                        Ya en el viaje
+                      </Badge>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={addMutation.isPending}
+                        onClick={() => addMutation.mutate(user)}
+                      >
+                        <Plus className="size-4" />
+                        Agregar
+                      </Button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
 
@@ -132,6 +171,12 @@ export function AddParticipantDialog({ tripId, open, onOpenChange }: AddParticip
             </p>
           )}
         </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => handleClose(false)}>
+            Cerrar
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

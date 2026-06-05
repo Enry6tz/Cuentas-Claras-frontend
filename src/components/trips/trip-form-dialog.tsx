@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/shared/date-picker';
 import {
   createTrip,
   updateTrip,
@@ -172,21 +173,11 @@ export function TripFormDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
                 <Label htmlFor="startDate">Inicio</Label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
+                <DatePicker id="startDate" value={startDate} onChange={setStartDate} placeholder="Inicio" />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="endDate">Fin</Label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                />
+                <DatePicker id="endDate" value={endDate} onChange={setEndDate} placeholder="Fin" />
               </div>
             </div>
 

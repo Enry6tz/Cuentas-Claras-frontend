@@ -1,8 +1,8 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Trash2 } from 'lucide-react';
+import { Trash2, ArrowRight, CreditCard } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -12,8 +12,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { PersonAvatar } from '@/components/shared/ui-bits';
 import { listPayments, deletePayment } from '@/lib/api/payments';
-import { useQuery } from '@tanstack/react-query';
 import type { Payment } from '@/types';
 
 interface PaymentListProps {
@@ -21,6 +21,13 @@ interface PaymentListProps {
   currentUserId: string;
   isSupervisor: boolean;
   isCreator: boolean;
+  baseCurrency?: string;
+}
+
+function fmtAmount(value: string) {
+  const n = parseFloat(value);
+  if (Number.isNaN(n)) return value;
+  return n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function PaymentList({
@@ -28,6 +35,7 @@ export function PaymentList({
   currentUserId,
   isSupervisor,
   isCreator,
+  baseCurrency,
 }: PaymentListProps) {
   const queryClient = useQueryClient();
 
@@ -53,14 +61,20 @@ export function PaymentList({
   };
 
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground py-4">Cargando pagos...</p>;
+    return <p className="px-4 py-6 text-sm text-muted-foreground">Cargando pagos...</p>;
   }
 
   if (!payments || payments.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground py-4">
-        No hay pagos registrados en este viaje.
-      </p>
+      <div className="flex flex-col items-center justify-center px-4 py-12">
+        <div className="rounded-full bg-muted p-3 text-muted-foreground">
+          <CreditCard className="size-5" />
+        </div>
+        <p className="mt-3 text-sm font-medium text-foreground">Todavía no hay pagos registrados</p>
+        <p className="mt-1 text-center text-xs text-muted-foreground">
+          Registrá una transferencia para empezar a saldar deudas.
+        </p>
+      </div>
     );
   }
 
@@ -68,41 +82,66 @@ export function PaymentList({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Fecha</TableHead>
-          <TableHead>Deudor</TableHead>
-          <TableHead>Acreedor</TableHead>
-          <TableHead>Monto</TableHead>
+          <TableHead className="px-4">De</TableHead>
+          <TableHead />
+          <TableHead>A</TableHead>
           <TableHead>Nota</TableHead>
-          <TableHead></TableHead>
+          <TableHead>Fecha</TableHead>
+          <TableHead className="text-right">Monto</TableHead>
+          <TableHead className="px-4" />
         </TableRow>
       </TableHeader>
       <TableBody>
-        {payments.map((payment) => (
-          <TableRow key={payment.id}>
-            <TableCell className="text-xs">
-              {new Date(payment.date).toLocaleDateString('es-AR')}
-            </TableCell>
-            <TableCell>{payment.debtor?.name ?? '—'}</TableCell>
-            <TableCell>{payment.creditor?.name ?? '—'}</TableCell>
-            <TableCell className="font-medium">{payment.amount}</TableCell>
-            <TableCell className="text-xs text-muted-foreground">
-              {payment.note || '—'}
-            </TableCell>
-            <TableCell>
-              {canDelete(payment) && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive"
-                  onClick={() => deleteMutation.mutate(payment.id)}
-                  disabled={deleteMutation.isPending}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
+        {payments.map((payment) => {
+          const debtorName = payment.debtor?.name ?? '—';
+          const creditorName = payment.creditor?.name ?? '—';
+          return (
+            <TableRow key={payment.id}>
+              <TableCell className="px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <PersonAvatar name={debtorName} seed={payment.debtorId} className="size-7" />
+                  <span className="text-sm font-medium text-foreground">{debtorName}</span>
+                </div>
+              </TableCell>
+              <TableCell>
+                <ArrowRight className="size-4 text-muted-foreground" />
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <PersonAvatar name={creditorName} seed={payment.creditorId} className="size-7" />
+                  <span className="text-sm font-medium text-foreground">{creditorName}</span>
+                </div>
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {payment.note || '—'}
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {new Date(payment.date).toLocaleDateString('es-AR', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </TableCell>
+              <TableCell className="text-right text-sm font-semibold text-foreground tabular-nums">
+                {fmtAmount(payment.amount)}
+                {baseCurrency ? ` ${baseCurrency}` : ''}
+              </TableCell>
+              <TableCell className="px-4 text-right">
+                {canDelete(payment) && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => deleteMutation.mutate(payment.id)}
+                    disabled={deleteMutation.isPending}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                )}
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );
