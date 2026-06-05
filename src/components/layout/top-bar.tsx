@@ -1,10 +1,11 @@
 'use client';
 
-import { Menu, Search, Bell } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { UserButton } from '@clerk/nextjs';
 import { useUIStore } from '@/stores/ui-store';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { InvitationBell } from '@/components/invitations/invitation-bell';
 
 export function TopBar() {
   const { setMobileSidebarOpen } = useUIStore();
@@ -23,12 +24,7 @@ export function TopBar() {
       <div className="flex-1" />
 
       <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon" className="text-muted-foreground">
-          <Search className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="icon" className="text-muted-foreground">
-          <Bell className="h-4 w-4" />
-        </Button>
+        <InvitationBell />
         <Separator orientation="vertical" className="mx-2 h-6" />
         <UserButton />
       </div>

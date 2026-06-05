@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { searchUsers } from '@/lib/api/users';
-import { addParticipant } from '@/lib/api/participants';
+import { sendInvitation } from '@/lib/api/invitations';
 import type { UserPublic } from '@/types';
 
 interface AddParticipantDialogProps {
@@ -41,10 +41,10 @@ export function AddParticipantDialog({ tripId, open, onOpenChange }: AddParticip
   });
 
   const addMutation = useMutation({
-    mutationFn: (user: UserPublic) => addParticipant(tripId, user.id),
+    mutationFn: (user: UserPublic) => sendInvitation(tripId, user.id),
     onSuccess: () => {
-      toast.success('Participante agregado');
-      queryClient.invalidateQueries({ queryKey: ['trips', tripId, 'participants'] });
+      toast.success('Invitación enviada');
+      queryClient.invalidateQueries({ queryKey: ['trips', tripId, 'invitations'] });
       queryClient.invalidateQueries({ queryKey: ['trips', tripId] });
       onOpenChange(false);
       setQuery('');
@@ -52,13 +52,13 @@ export function AddParticipantDialog({ tripId, open, onOpenChange }: AddParticip
     onError: (err: unknown) => {
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 409) {
-        toast.error('El usuario ya es participante del viaje');
+        toast.error('El usuario ya es participante o ya fue invitado');
       } else if (status === 404) {
         toast.error('No se encontró ningún usuario con ese email');
       } else if (status === 400) {
         toast.error('El viaje está finalizado');
       } else {
-        toast.error('No se pudo agregar el participante');
+        toast.error('No se pudo enviar la invitación');
       }
     },
   });
@@ -119,7 +119,7 @@ export function AddParticipantDialog({ tripId, open, onOpenChange }: AddParticip
                     onClick={() => addMutation.mutate(user)}
                   >
                     <UserPlus className="h-4 w-4" />
-                    Agregar
+                    Invitar
                   </Button>
                 </li>
               ))}
