@@ -1,81 +1,68 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { TrendingDown, TrendingUp } from 'lucide-react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
+import { PersonAvatar } from '@/components/shared/ui-bits';
 import { getBalances } from '@/lib/api/balances';
-import { avatarColor, initials } from '@/lib/utils';
+
 interface BalanceSummaryProps {
   tripId: string;
+  baseCurrency?: string;
 }
 
-export function BalanceSummary({ tripId }: BalanceSummaryProps) {
+export function BalanceSummary({ tripId, baseCurrency }: BalanceSummaryProps) {
   const { data: balances, isLoading } = useQuery({
     queryKey: ['balances', tripId],
     queryFn: () => getBalances(tripId),
   });
 
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground py-4">Cargando balances...</p>;
+    return <p className="py-4 text-sm text-muted-foreground">Cargando balances...</p>;
   }
 
   if (!balances || balances.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground py-4">
-        No hay balances disponibles.
-      </p>
-    );
+    return <p className="py-4 text-sm text-muted-foreground">No hay balances disponibles.</p>;
   }
 
+  const currencyPrefix = baseCurrency ? `${baseCurrency} ` : '';
+
   return (
-    <div className="divide-y rounded-lg border">
+    <ul className="divide-y">
       {balances.map((entry) => {
-        const balanceNum = parseFloat(entry.balance);
-        const isPositive = balanceNum > 0;
-        const isNegative = balanceNum < 0;
-        const isSettled = balanceNum === 0;
+        const balance = parseFloat(entry.balance);
+        const isPositive = balance > 0;
+        const isNegative = balance < 0;
+        const color = isPositive
+          ? 'text-success'
+          : isNegative
+            ? 'text-destructive'
+            : 'text-muted-foreground';
+        const subLabel = isPositive ? 'Le deben' : isNegative ? 'Debe' : 'En cero';
+        const amountText =
+          balance === 0
+            ? `${currencyPrefix}0,00`
+            : `${isPositive ? '+' : '−'}${currencyPrefix}${Math.abs(balance).toLocaleString('es-AR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}`;
 
         return (
-          <div
-            key={entry.userId}
-            className="flex items-center justify-between px-4 py-3"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-white ${avatarColor(entry.userId || entry.userName)}`}>
-                {initials(entry.userName)}
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">{entry.userName}</p>
-                {isPositive && (
-                  <p className="text-xs text-success">Le deben</p>
-                )}
-                {isNegative && (
-                  <p className="text-xs text-destructive">Debe</p>
-                )}
-                {isSettled && (
-                  <p className="text-xs text-muted-foreground">En cero</p>
-                )}
+          <li key={entry.userId} className="flex items-center justify-between gap-3 py-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <PersonAvatar name={entry.userName} seed={entry.userId} />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">{entry.userName}</p>
+                <p className={`text-xs ${color}`}>{subLabel}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {isPositive && (
-                <span className="flex items-center gap-1 text-sm font-semibold text-success tabular-nums">
-                  <TrendingUp className="h-4 w-4" />
-                  +{entry.balance}
-                </span>
-              )}
-              {isNegative && (
-                <span className="flex items-center gap-1 text-sm font-semibold text-destructive tabular-nums">
-                  <TrendingDown className="h-4 w-4" />
-                  {entry.balance}
-                </span>
-              )}
-              {isSettled && (
-                <span className="text-sm text-muted-foreground tabular-nums">$0.00</span>
-              )}
+            <div className={`flex items-center gap-1.5 text-sm font-semibold tabular-nums ${color}`}>
+              {isPositive && <TrendingUp className="size-4" />}
+              {isNegative && <TrendingDown className="size-4" />}
+              {amountText}
             </div>
-          </div>
+          </li>
         );
       })}
-    </div>
+    </ul>
   );
 }

@@ -1,8 +1,8 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Receipt } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -13,9 +13,9 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { PersonAvatar } from '@/components/shared/ui-bits';
 import { listExpenses, deleteExpense } from '@/lib/api/expenses';
-import type { Expense, Participation } from '@/types';
-import { useQuery } from '@tanstack/react-query';
+import type { Expense, ExpenseSplitType, Participation } from '@/types';
 
 interface ExpenseListProps {
   tripId: string;
@@ -23,19 +23,32 @@ interface ExpenseListProps {
   currentUserId: string;
   isSupervisor: boolean;
   isCreator: boolean;
+  baseCurrency?: string;
 }
 
-const splitTypeLabels: Record<string, string> = {
-  EQUAL: 'Igualitario',
-  EXACT: 'Exacto',
-  PERCENT: 'Porcentaje',
+const splitTypeMeta: Record<
+  ExpenseSplitType,
+  { label: string; variant: 'outline' | 'secondary' }
+> = {
+  EQUAL: { label: 'Igual', variant: 'outline' },
+  EXACT: { label: 'Exacto', variant: 'outline' },
+  PERCENT: { label: 'Porcentaje', variant: 'secondary' },
 };
+
+function fmtAmount(value: string | number | null | undefined) {
+  if (value == null || value === '') return '—';
+  const n = typeof value === 'string' ? parseFloat(value) : value;
+  if (Number.isNaN(n)) return '—';
+  return n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 export function ExpenseList({
   tripId,
+  participations,
   currentUserId,
   isSupervisor,
   isCreator,
+  baseCurrency,
 }: ExpenseListProps) {
   const queryClient = useQueryClient();
 
@@ -60,15 +73,33 @@ export function ExpenseList({
     return expense.creatorId === currentUserId;
   };
 
+  // Nombre del pagador: quien figura con monto pagado en los detalles, o el creador.
+  const payerOf = (expense: Expense): { name: string; seed: string } => {
+    const payer = expense.details?.find((d) => parseFloat(d.amountPaid ?? '0') > 0);
+    if (payer?.user) return { name: payer.user.name, seed: payer.userId };
+    if (expense.creator) return { name: expense.creator.name, seed: expense.creatorId };
+    const fromParticipations = participations.find((p) => p.userId === expense.creatorId);
+    if (fromParticipations?.user) {
+      return { name: fromParticipations.user.name, seed: expense.creatorId };
+    }
+    return { name: '—', seed: expense.creatorId };
+  };
+
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground py-4">Cargando gastos...</p>;
+    return <p className="px-4 py-6 text-sm text-muted-foreground">Cargando gastos...</p>;
   }
 
   if (!expenses || expenses.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground py-4">
-        No hay gastos registrados en este viaje.
-      </p>
+      <div className="flex flex-col items-center justify-center px-4 py-12">
+        <div className="rounded-full bg-muted p-3 text-muted-foreground">
+          <Receipt className="size-5" />
+        </div>
+        <p className="mt-3 text-sm font-medium text-foreground">Todavía no hay gastos en este viaje</p>
+        <p className="mt-1 text-center text-xs text-muted-foreground">
+          Registrá el primer gasto para empezar a dividir.
+        </p>
+      </div>
     );
   }
 
@@ -76,64 +107,74 @@ export function ExpenseList({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Descripción</TableHead>
+          <TableHead className="px-4">Descripción</TableHead>
           <TableHead>Fecha</TableHead>
           <TableHead>Pagó</TableHead>
           <TableHead>División</TableHead>
           <TableHead className="text-right">Monto</TableHead>
-          <TableHead></TableHead>
+          <TableHead className="px-4" />
         </TableRow>
       </TableHeader>
       <TableBody>
-        {expenses.map((expense) => (
-          <TableRow key={expense.id}>
-            <TableCell>
-              <p className="font-medium text-foreground">{expense.description || '—'}</p>
-              {expense.category && (
-                <Badge variant="secondary" className="mt-0.5 text-xs">
-                  {expense.category}
-                </Badge>
-              )}
-            </TableCell>
-            <TableCell className="text-xs text-muted-foreground">
-              {new Date(expense.date).toLocaleDateString('es-AR')}
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                  {expense.creator?.name?.charAt(0).toUpperCase() ?? '?'}
+        {expenses.map((expense) => {
+          const split = splitTypeMeta[expense.splitType];
+          const payer = payerOf(expense);
+          const hasOriginal =
+            expense.baseAmount != null && expense.originalCurrency !== baseCurrency;
+
+          return (
+            <TableRow key={expense.id}>
+              <TableCell className="px-4 py-3">
+                <div className="font-medium text-foreground">{expense.description || '—'}</div>
+                {expense.category && (
+                  <Badge variant="secondary" className="mt-1">
+                    {expense.category}
+                  </Badge>
+                )}
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {new Date(expense.date).toLocaleDateString('es-AR', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <PersonAvatar name={payer.name} seed={payer.seed} className="size-7" />
+                  <span className="text-sm text-foreground">{payer.name}</span>
                 </div>
-                <span className="text-sm text-foreground">{expense.creator?.name ?? '—'}</span>
-              </div>
-            </TableCell>
-            <TableCell>
-              <Badge variant={expense.splitType === 'PERCENT' ? 'secondary' : 'outline'} className="text-xs">
-                {splitTypeLabels[expense.splitType]}
-              </Badge>
-            </TableCell>
-            <TableCell className="text-right">
-              <p className="font-medium tabular-nums">{expense.baseAmount ?? expense.originalAmount}</p>
-              {expense.originalCurrency !== 'ARS' && (
-                <p className="text-xs text-muted-foreground tabular-nums">
-                  {expense.originalAmount} {expense.originalCurrency}
-                </p>
-              )}
-            </TableCell>
-            <TableCell>
-              {canDelete(expense) && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive"
-                  onClick={() => deleteMutation.mutate(expense.id)}
-                  disabled={deleteMutation.isPending}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
+              </TableCell>
+              <TableCell>
+                <Badge variant={split.variant}>{split.label}</Badge>
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="text-sm font-semibold text-foreground tabular-nums">
+                  {fmtAmount(expense.baseAmount ?? expense.originalAmount)}
+                  {baseCurrency ? ` ${baseCurrency}` : ''}
+                </div>
+                {hasOriginal && (
+                  <div className="text-xs text-muted-foreground tabular-nums">
+                    {fmtAmount(expense.originalAmount)} {expense.originalCurrency}
+                  </div>
+                )}
+              </TableCell>
+              <TableCell className="px-4 text-right">
+                {canDelete(expense) && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => deleteMutation.mutate(expense.id)}
+                    disabled={deleteMutation.isPending}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                )}
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );

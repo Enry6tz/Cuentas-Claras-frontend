@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeftRight, ArrowRight } from 'lucide-react';
+import { ArrowRight, ArrowLeftRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { PersonAvatar } from '@/components/shared/ui-bits';
 import { getSettlement } from '@/lib/api/balances';
 import { PaymentFormDialog } from '@/components/payments/payment-form-dialog';
 import { avatarColor, initials } from '@/lib/utils';
@@ -33,39 +33,40 @@ export function SettlementSuggestions({
   });
 
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground py-4">Calculando liquidación...</p>;
+    return <p className="py-4 text-sm text-muted-foreground">Calculando liquidación...</p>;
   }
 
   if (!settlement || settlement.length === 0) {
     return (
-      <p className="py-4 text-center text-sm text-muted-foreground">
-        Todos los saldos están en cero. No se necesitan pagos.
+      <p className="py-4 text-sm text-muted-foreground">
+        No hay deudas pendientes. ¡Están en cero!
       </p>
     );
   }
 
+  const fmt = (value: string) => {
+    const n = parseFloat(value);
+    return Number.isNaN(n)
+      ? value
+      : n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
   return (
     <>
-      <div className="grid gap-2">
+      <ul className="divide-y">
         {settlement.map((s, i) => (
-          <Card key={i}>
-            <CardContent className="flex items-center justify-between py-3">
-              <div className="flex items-center gap-3">
-                <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold text-white ${avatarColor(s.fromUserId)}`}>
-                  {initials(s.fromUserName)}
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold text-white ${avatarColor(s.toUserId)}`}>
-                  {initials(s.toUserName)}
-                </div>
-                <div>
-                  <p className="text-sm">
-                    <strong>{s.fromUserName}</strong> le debe{' '}
-                    <strong>${s.amount}</strong> a{' '}
-                    <strong>{s.toUserName}</strong>
-                  </p>
-                </div>
-              </div>
+          <li key={i} className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <PersonAvatar name={s.fromUserName} seed={s.fromUserId} className="size-7" />
+              <span className="text-sm font-medium text-foreground">{s.fromUserName}</span>
+              <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+              <PersonAvatar name={s.toUserName} seed={s.toUserId} className="size-7" />
+              <span className="text-sm font-medium text-foreground">{s.toUserName}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold text-foreground tabular-nums">
+                {baseCurrency} {fmt(s.amount)}
+              </span>
               <Button
                 variant="outline"
                 size="sm"
@@ -78,12 +79,17 @@ export function SettlementSuggestions({
                 }
                 className="gap-1"
               >
-                <ArrowLeftRight className="h-4 w-4" />
+                <ArrowLeftRight className="size-4" />
                 Registrar pago
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </li>
         ))}
+      </ul>
+
+      <div className="mt-4 rounded-lg bg-muted p-4 text-sm text-muted-foreground">
+        Con estos {settlement.length} {settlement.length === 1 ? 'pago' : 'pagos'}, todos los
+        saldos quedan en cero. Los saldos siempre suman 0.
       </div>
 
       {paymentPrefill && (

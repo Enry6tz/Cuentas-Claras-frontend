@@ -3,10 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { MapPin, Plus, Users, Receipt } from 'lucide-react';
+import { Plane, Plus, Users, Receipt } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { TripStatusBadge } from '@/components/shared/ui-bits';
 import { TripFormDialog } from '@/components/trips/trip-form-dialog';
 import { listTrips } from '@/lib/api/trips';
 
@@ -73,18 +73,18 @@ export default function TripsPage() {
       {!isLoading && !isError && trips?.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
-            <div className="rounded-full bg-primary/10 p-4">
-              <MapPin className="h-8 w-8 text-primary" />
+            <div className="rounded-full bg-muted p-4">
+              <Plane className="size-8 text-muted-foreground" />
             </div>
             <h3 className="mt-5 text-lg font-semibold text-foreground">
-              Sin viajes aun
+              Comenzá tu primer viaje
             </h3>
             <p className="mt-2 max-w-sm text-center text-sm text-muted-foreground">
-              Crea tu primer viaje para empezar a registrar gastos compartidos
-              con amigos.
+              Creá un grupo, sumá integrantes y empezá a registrar gastos
+              compartidos con amigos.
             </p>
             <Button className="mt-6" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4" />
+              <Plus className="size-4" />
               Crear viaje
             </Button>
           </CardContent>
@@ -96,17 +96,13 @@ export default function TripsPage() {
           {trips.map((trip) => (
             // Cada card es clickeable y navega al detalle del trip.
             <Link key={trip.id} href={`/trips/${trip.id}`}>
-              <Card className="cursor-pointer transition-colors hover:bg-muted/50">
+              <Card className="h-full cursor-pointer transition-colors hover:bg-muted/50">
                 <CardContent className="p-5">
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     <h3 className="font-semibold text-foreground line-clamp-1">
                       {trip.name}
                     </h3>
-                    <Badge
-                      variant={trip.status === 'ACTIVE' ? 'default' : 'secondary'}
-                    >
-                      {trip.status === 'ACTIVE' ? 'Activo' : 'Finalizado'}
-                    </Badge>
+                    <TripStatusBadge status={trip.status} />
                   </div>
                   {trip.description && (
                     <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
@@ -115,11 +111,11 @@ export default function TripsPage() {
                   )}
                   <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1">
-                      <Users className="h-3.5 w-3.5" />
+                      <Users className="size-3.5" />
                       {trip._count?.participations ?? 0}
                     </div>
                     <div className="flex items-center gap-1">
-                      <Receipt className="h-3.5 w-3.5" />
+                      <Receipt className="size-3.5" />
                       {trip._count?.expenses ?? 0}
                     </div>
                     <div className="ml-auto font-medium">

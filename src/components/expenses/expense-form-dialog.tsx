@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { ArrowLeftRight, Plus, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -21,6 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { PersonAvatar } from '@/components/shared/ui-bits';
+import { DatePicker } from '@/components/shared/date-picker';
 import { createExpense, type CreateExpensePayload } from '@/lib/api/expenses';
 import { getCurrencyRate } from '@/lib/api/currency';
 import type { Participation } from '@/types';
@@ -224,30 +229,51 @@ export function ExpenseFormDialog({
     mutation.mutate(payload);
   }
 
+  // Derivados para la fila de resumen del reparto.
+  const equalPerPerson =
+    participantIds.length > 0 && amountNum > 0
+      ? Math.round((amountNum / participantIds.length) * 100) / 100
+      : null;
+  const exactSum = exactShares.reduce((s, x) => s + (parseFloat(x.amountOwed) || 0), 0);
+  const percentSum = percentShares.reduce((s, x) => s + (parseFloat(x.percent) || 0), 0);
+
+  // Mapa value→label para que el trigger del pagador muestre el nombre, no el UUID.
+  const payerItems = participations.map((p) => ({
+    value: p.userId,
+    label: (
+      <span className="flex items-center gap-2">
+        <PersonAvatar name={p.user?.name ?? 'Sin nombre'} seed={p.userId} className="size-6" />
+        {p.user?.name ?? 'Sin nombre'}
+      </span>
+    ),
+  }));
+
   return (
     <Dialog key={open ? 'open' : 'closed'} open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Nuevo gasto</DialogTitle>
           <DialogDescription>
-            Registrá un gasto compartido entre los participantes del viaje.
+            Registrá un gasto y elegí cómo dividirlo entre los integrantes.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
+          {/* Descripción */}
           <div className="grid gap-2">
             <Label htmlFor="description">Descripción</Label>
             <Input
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Cena en el restaurante"
+              placeholder="Cena de bienvenida"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Monto + Moneda */}
+          <div className="grid grid-cols-[1fr_auto] gap-3">
             <div className="grid gap-2">
-              <Label htmlFor="amount">Monto *</Label>
+              <Label htmlFor="amount">Monto</Label>
               <Input
                 id="amount"
                 type="number"
@@ -255,14 +281,15 @@ export function ExpenseFormDialog({
                 min="0.01"
                 value={originalAmount}
                 onChange={(e) => setOriginalAmount(e.target.value)}
-                placeholder="100"
+                placeholder="0"
+                className="text-right"
                 required
               />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="currency">Moneda</Label>
               <Select value={originalCurrency} onValueChange={(v) => setOriginalCurrency(v ?? '')}>
-                <SelectTrigger>
+                <SelectTrigger className="w-24">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -276,64 +303,56 @@ export function ExpenseFormDialog({
             </div>
           </div>
 
+          {/* Preview de conversión */}
           {originalCurrency !== baseCurrency && (
-            <div className="grid gap-2">
-              <Label htmlFor="manualRate">
-                Tasa de cambio manual (opcional, si la API falla)
-              </Label>
-              <Input
-                id="manualRate"
-                type="number"
-                step="0.000001"
-                value={manualRate}
-                onChange={(e) => setManualRate(e.target.value)}
-                placeholder={`1 ${originalCurrency} = ? ${baseCurrency}`}
-              />
-              <p className="text-xs text-muted-foreground">
-                Si no se ingresa, se obtiene automáticamente de la API.
-              </p>
-
-              {effectiveRate && (
-                <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
-                  {rateLoading && (
-                    <p className="text-muted-foreground">Obteniendo cotización...</p>
-                  )}
-                  {apiRate && (
-                    <p className="font-medium">
-                      1 {originalCurrency} = {apiRate.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} {baseCurrency}
+            <div className="space-y-2">
+              {effectiveRate ? (
+                <div className="flex items-start gap-2 rounded-lg border border-primary/10 bg-primary/5 p-3">
+                  <ArrowLeftRight className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <div className="space-y-0.5">
+                    <p className="text-sm">
+                      <span className="font-medium">{fmt(amountNum, originalCurrency)}</span>{' '}
+                      {baseEquivalent !== null && (
+                        <span className="text-primary">→ {fmt(baseEquivalent, baseCurrency)}</span>
+                      )}
                     </p>
-                  )}
-                  {manualRateNum && apiRate && apiRate !== manualRateNum && (
-                    <p className="text-xs text-muted-foreground">
-                      Usando tasa manual. API: 1 {originalCurrency} = {apiRate.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} {baseCurrency}
-                    </p>
-                  )}
-                  {amountNum > 0 && baseEquivalent !== null && (
-                    <p>
-                      {fmt(amountNum, originalCurrency)} → {fmt(baseEquivalent, baseCurrency)}
-                    </p>
-                  )}
+                    {effectiveRate && (
+                      <p className="text-xs text-muted-foreground">
+                        Tasa de cambio: 1 {originalCurrency} ={' '}
+                        {effectiveRate.toLocaleString('es-AR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 6,
+                        })}{' '}
+                        {baseCurrency} · el reparto se calcula sobre el monto en moneda base.
+                      </p>
+                    )}
+                  </div>
                 </div>
+              ) : (
+                !rateLoading && (
+                  <p className="text-xs text-destructive">
+                    Cotización no disponible. Ingresá una tasa manual o intentá de nuevo.
+                  </p>
+                )
               )}
-
-              {!effectiveRate && !rateLoading && originalCurrency !== baseCurrency && (
-                <p className="text-xs text-destructive">
-                  Cotización no disponible. Ingresá una tasa manual o intentá de nuevo.
-                </p>
-              )}
+              <div className="grid gap-1.5">
+                <Label htmlFor="manualRate" className="text-xs text-muted-foreground">
+                  Tasa manual (opcional, si la API falla)
+                </Label>
+                <Input
+                  id="manualRate"
+                  type="number"
+                  step="0.000001"
+                  value={manualRate}
+                  onChange={(e) => setManualRate(e.target.value)}
+                  placeholder={`1 ${originalCurrency} = ? ${baseCurrency}`}
+                />
+              </div>
             </div>
           )}
 
+          {/* Categoría + Fecha */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="date">Fecha</Label>
-              <Input
-                id="date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </div>
             <div className="grid gap-2">
               <Label htmlFor="category">Categoría</Label>
               <Input
@@ -343,217 +362,212 @@ export function ExpenseFormDialog({
                 placeholder="Comida"
               />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="date">Fecha</Label>
+              <DatePicker id="date" value={date} onChange={setDate} />
+            </div>
           </div>
 
+          {/* Tipo de división — segmented control */}
           <div className="grid gap-2">
-            <Label>Tipo de reparto</Label>
-            <Select
+            <Label>Tipo de división</Label>
+            <Tabs
               value={splitType}
               onValueChange={(v) => v && setSplitType(v as 'EQUAL' | 'EXACT' | 'PERCENT')}
             >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="EQUAL">Igualitario (EQUAL)</SelectItem>
-                <SelectItem value="EXACT">Monto exacto (EXACT)</SelectItem>
-                <SelectItem value="PERCENT">Porcentaje (PERCENT)</SelectItem>
-              </SelectContent>
-            </Select>
+              <TabsList className="w-full">
+                <TabsTrigger value="EQUAL">Igual</TabsTrigger>
+                <TabsTrigger value="EXACT">Exacto</TabsTrigger>
+                <TabsTrigger value="PERCENT">Porcentaje</TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
 
-          <div className="grid gap-2">
-            <Label>Pagadores</Label>
-            {payers.map((payer, i) => {
-              const selectedByOthers = payers
-                .filter((_, j) => j !== i)
-                .map(p => p.userId)
-                .filter(Boolean);
-              const available = participations.filter(
-                p => !selectedByOthers.includes(p.userId)
-              );
-              return (
-                <div key={i} className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <Select
-                      value={payer.userId}
-                      onValueChange={(v) => v && handlePayerChange(i, 'userId', v)}
+          {/* Lista de participantes */}
+          <div className="overflow-hidden rounded-lg border">
+            <div className="divide-y">
+              {participations.map((p) => {
+                const name = p.user?.name ?? 'Sin nombre';
+
+                if (splitType === 'EQUAL') {
+                  const checked = participantIds.includes(p.userId);
+                  return (
+                    <label
+                      key={p.userId}
+                      className="flex cursor-pointer items-center gap-3 px-3 py-2.5"
                     >
-                      <SelectTrigger className="flex-1">
-                        <span className={!payer.userId ? 'text-muted-foreground' : ''}>
-                          {payer.userId
-                            ? (participations.find(p => p.userId === payer.userId)?.user?.name ?? 'Sin nombre')
-                            : 'Quién pagó'
-                          }
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => handleToggleParticipant(p.userId)}
+                      />
+                      <PersonAvatar name={name} seed={p.userId} className="size-7" />
+                      <span className="flex-1 text-sm text-foreground">{name}</span>
+                      {checked && equalPerPerson !== null && (
+                        <span className="text-sm text-muted-foreground tabular-nums">
+                          {fmt(equalPerPerson, originalCurrency)}
                         </span>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {available.map((p) => (
-                          <SelectItem key={p.userId} value={p.userId}>
-                            {p.user?.name ?? 'Sin nombre'}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="Monto"
-                      className="w-28"
-                      value={payer.amountPaid}
-                      onChange={(e) => handlePayerChange(i, 'amountPaid', e.target.value)}
-                    />
-                    {payers.length > 1 && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive shrink-0"
-                        onClick={() => handleRemovePayer(i)}
-                      >
-                        ×
-                      </Button>
-                    )}
-                  </div>
-                  {effectiveRate && payer.amountPaid && (
-                    <p className="text-xs text-muted-foreground ml-1">
-                      ≈ {fmt(Math.round(parseFloat(payer.amountPaid) * effectiveRate * 100) / 100, baseCurrency)}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-            <Button variant="outline" size="sm" onClick={handleAddPayer}>
-              + Agregar pagador
-            </Button>
-          </div>
+                      )}
+                    </label>
+                  );
+                }
 
-          {splitType === 'EQUAL' && (
-            <div className="grid gap-2">
-              <Label>Participantes del reparto</Label>
-              <p className="text-xs text-muted-foreground">
-                Seleccioná a quiénes incluir en la división igualitaria.
-              </p>
-              <div className="grid grid-cols-2 gap-1">
-                {participations.map((p) => (
-                  <label key={p.userId} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={participantIds.includes(p.userId)}
-                      onChange={() => handleToggleParticipant(p.userId)}
-                      className="h-4 w-4"
-                    />
-                    {p.user?.name ?? 'Sin nombre'}
-                  </label>
-                ))}
-              </div>
-              {participantIds.length > 0 && amountNum > 0 && (
-                <div className="rounded-md border bg-muted/40 p-2 text-sm">
-                  {(() => {
-                    const n = participantIds.length;
-                    const perPersonOrig = Math.round((amountNum / n) * 100) / 100;
-                    const perPersonBase = baseEquivalent !== null
-                      ? Math.round((baseEquivalent / n) * 100) / 100
-                      : null;
-                    return (
-                      <>
-                        <p className="text-xs text-muted-foreground mb-1">Cada uno paga:</p>
-                        <p className="font-medium">
-                          {fmt(perPersonOrig, originalCurrency)}
-                          {perPersonBase !== null && <> ({fmt(perPersonBase, baseCurrency)})</>}
-                        </p>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
-          )}
+                if (splitType === 'EXACT') {
+                  const share = exactShares.find((s) => s.userId === p.userId);
+                  return (
+                    <div key={p.userId} className="flex items-center gap-3 px-3 py-2.5">
+                      <PersonAvatar name={name} seed={p.userId} className="size-7" />
+                      <span className="flex-1 text-sm text-foreground">{name}</span>
+                      <span className="text-xs text-muted-foreground">{originalCurrency}</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0,00"
+                        className="w-28 text-right"
+                        value={share?.amountOwed ?? ''}
+                        onChange={(e) => handleExactChange(p.userId, e.target.value)}
+                      />
+                    </div>
+                  );
+                }
 
-          {splitType === 'EXACT' && (
-            <div className="grid gap-2">
-              <Label>Montos exactos</Label>
-              <p className="text-xs text-muted-foreground">
-                Ingresá cuánto debe cada participante en {baseCurrency}.
-                {effectiveRate && <> Equivalente en {originalCurrency} mostrado al lado.</>}
-              </p>
-              {participations.map((p) => {
-                const share = exactShares.find((s) => s.userId === p.userId);
-                const amountOwedNum = share?.amountOwed ? parseFloat(share.amountOwed) : 0;
-                const originalEquiv = effectiveRate && amountOwedNum
-                  ? Math.round((amountOwedNum / effectiveRate) * 100) / 100
-                  : null;
-                return (
-                  <div key={p.userId} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                    <span className="text-sm">{p.user?.name ?? 'Sin nombre'}</span>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
-                      className="w-28"
-                      value={share?.amountOwed ?? ''}
-                      onChange={(e) => handleExactChange(p.userId, e.target.value)}
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      {originalEquiv !== null && originalEquiv > 0
-                        ? `≈ ${fmt(originalEquiv, originalCurrency)}`
-                        : ''}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {splitType === 'PERCENT' && (
-            <div className="grid gap-2">
-              <Label>Porcentajes</Label>
-              <p className="text-xs text-muted-foreground">
-                Ingresá el porcentaje que debe cada participante. Deben sumar 100%.
-              </p>
-              {participations.map((p) => {
+                // PERCENT
                 const share = percentShares.find((s) => s.userId === p.userId);
                 const pct = share?.percent ? parseFloat(share.percent) : 0;
-                const origAmt = amountNum && pct ? Math.round((amountNum * pct / 100) * 100) / 100 : null;
-                const baseAmt = baseEquivalent !== null && pct ? Math.round((baseEquivalent * pct / 100) * 100) / 100 : null;
+                const origAmt = amountNum && pct ? Math.round((amountNum * pct) / 100 * 100) / 100 : null;
                 return (
-                  <div key={p.userId} className="flex items-center gap-2">
-                    <span className="flex-1 text-sm">{p.user?.name ?? 'Sin nombre'}</span>
+                  <div key={p.userId} className="flex items-center gap-3 px-3 py-2.5">
+                    <PersonAvatar name={name} seed={p.userId} className="size-7" />
+                    <span className="flex-1 text-sm text-foreground">{name}</span>
                     <Input
                       type="number"
                       step="0.1"
                       min="0"
                       max="100"
                       placeholder="0"
-                      className="w-20"
+                      className="w-20 text-right"
                       value={share?.percent ?? ''}
                       onChange={(e) => handlePercentChange(p.userId, e.target.value)}
                     />
                     <span className="text-sm text-muted-foreground">%</span>
                     {origAmt !== null && pct > 0 && (
-                      <span className="text-xs text-muted-foreground ml-1">
+                      <span className="w-24 text-right text-xs text-muted-foreground tabular-nums">
                         {fmt(origAmt, originalCurrency)}
-                        {baseAmt !== null && <> ({fmt(baseAmt, baseCurrency)})</>}
                       </span>
                     )}
                   </div>
                 );
               })}
             </div>
-          )}
+
+            {/* Fila resumen */}
+            <div className="flex items-center justify-between bg-muted/50 px-3 py-2.5 text-sm">
+              {splitType === 'EQUAL' && (
+                <>
+                  <span className="text-muted-foreground">
+                    {participantIds.length} integrantes · cada uno paga
+                  </span>
+                  <span className="font-semibold text-success tabular-nums">
+                    {equalPerPerson !== null ? fmt(equalPerPerson, originalCurrency) : '—'}
+                  </span>
+                </>
+              )}
+              {splitType === 'EXACT' && (
+                <>
+                  <span className="text-muted-foreground">Suma asignada</span>
+                  <span
+                    className={`font-semibold tabular-nums ${
+                      Math.abs(exactSum - amountNum) < 0.01 && amountNum > 0
+                        ? 'text-success'
+                        : 'text-foreground'
+                    }`}
+                  >
+                    {fmt(exactSum, originalCurrency)}
+                  </span>
+                </>
+              )}
+              {splitType === 'PERCENT' && (
+                <>
+                  <span className="text-muted-foreground">Total asignado</span>
+                  <span
+                    className={`font-semibold tabular-nums ${
+                      Math.abs(percentSum - 100) < 1 ? 'text-success' : 'text-foreground'
+                    }`}
+                  >
+                    {percentSum.toLocaleString('es-AR', { maximumFractionDigits: 1 })}%
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* ¿Quién pagó? */}
+          <div className="grid gap-2">
+            <Label>¿Quién pagó?</Label>
+            {payers.map((payer, i) => {
+              const selectedByOthers = payers
+                .filter((_, j) => j !== i)
+                .map((p) => p.userId)
+                .filter(Boolean);
+              const available = participations.filter(
+                (p) => !selectedByOthers.includes(p.userId),
+              );
+              return (
+                <div key={i} className="flex items-center gap-2">
+                  <Select
+                    items={payerItems}
+                    value={payer.userId}
+                    onValueChange={(v) => v && handlePayerChange(i, 'userId', v)}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Quién pagó" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {available.map((p) => (
+                        <SelectItem key={p.userId} value={p.userId}>
+                          {p.user?.name ?? 'Sin nombre'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-xs text-muted-foreground">{originalCurrency}</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Monto"
+                    className="w-28 text-right"
+                    value={payer.amountPaid}
+                    onChange={(e) => handlePayerChange(i, 'amountPaid', e.target.value)}
+                  />
+                  {payers.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleRemovePayer(i)}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+            <div>
+              <Button variant="link" size="sm" className="h-auto px-0" onClick={handleAddPayer}>
+                <Plus className="size-4" />
+                Agregar pagador
+              </Button>
+            </div>
+          </div>
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={mutation.isPending}
-          >
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
             Cancelar
           </Button>
           <Button onClick={handleSubmit} disabled={mutation.isPending}>
-            {mutation.isPending ? 'Creando...' : 'Crear gasto'}
+            {mutation.isPending ? 'Guardando...' : 'Guardar gasto'}
           </Button>
         </DialogFooter>
       </DialogContent>
