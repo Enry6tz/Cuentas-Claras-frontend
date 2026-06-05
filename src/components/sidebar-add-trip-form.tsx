@@ -1,9 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { UserPlus, Loader2 } from 'lucide-react';
+import { Send, Loader2 } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -20,75 +19,64 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { listTrips } from '@/lib/api/trips';
-import { searchUsers } from '@/lib/api/users';
-import { addParticipant } from '@/lib/api/participants';
+import { useTrips } from '@/hooks/querys/trips/useTrips';
+import { useInvitationMutations } from '@/hooks/querys/invitations/useInvitationMutations';
+import { searchUsers } from '@/services/api/users';
 
 /**
- * Formulario compacto del pie del sidebar para sumar a alguien (por email)
- * a uno de tus viajes activos. Reusa los endpoints existentes:
- * busca el usuario por email y lo agrega como participante del viaje elegido.
+ * Formulario compacto del pie del sidebar para invitar a alguien (por email)
+ * a uno de tus viajes activos. Busca el usuario por email y le envía una
+ * invitación como MEMBER; la persona se une al viaje cuando la acepta.
  */
 export function SidebarAddTripForm() {
-  const queryClient = useQueryClient();
   const [email, setEmail] = useState('');
   const [tripId, setTripId] = useState('');
+  const [searching, setSearching] = useState(false);
 
-  const { data: trips = [] } = useQuery({
-    queryKey: ['trips'],
-    queryFn: listTrips,
-    staleTime: 60_000,
-  });
+  const { data: trips = [] } = useTrips();
   const activeTrips = trips.filter((t) => t.status === 'ACTIVE');
 
-  const mutation = useMutation({
-    mutationFn: async () => {
-      const value = email.trim().toLowerCase();
-      const results = await searchUsers(value);
-      const match = results.find((u) => u.email.toLowerCase() === value) ?? results[0];
-      if (!match) {
-        throw new Error('NOT_FOUND');
-      }
-      return addParticipant(tripId, match.id);
-    },
-    onSuccess: () => {
-      toast.success('Integrante agregado al viaje');
-      queryClient.invalidateQueries({ queryKey: ['trips', tripId, 'participants'] });
-      queryClient.invalidateQueries({ queryKey: ['trips', tripId] });
-      setEmail('');
-    },
-    onError: (err: unknown) => {
-      if (err instanceof Error && err.message === 'NOT_FOUND') {
-        toast.error('No se encontró ningún usuario con ese email');
-        return;
-      }
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 409) toast.error('El usuario ya es integrante del viaje');
-      else if (status === 404) toast.error('No se encontró ningún usuario con ese email');
-      else if (status === 400) toast.error('El viaje está finalizado');
-      else toast.error('No se pudo agregar el integrante');
-    },
-  });
+  const { send } = useInvitationMutations(tripId);
+  const busy = searching || send.isPending;
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!tripId) {
       toast.error('Elegí un viaje');
       return;
     }
-    if (email.trim().length < 3) {
+    const value = email.trim().toLowerCase();
+    if (value.length < 3) {
       toast.error('Ingresá un email válido');
       return;
     }
-    mutation.mutate();
+
+    setSearching(true);
+    try {
+      const results = await searchUsers(value);
+      const match =
+        results.find((u) => u.email.toLowerCase() === value) ?? results[0];
+      if (!match) {
+        toast.error('No se encontró ningún usuario con ese email');
+        return;
+      }
+      send.mutate(
+        { userId: match.id, role: 'MEMBER' },
+        { onSuccess: () => setEmail('') },
+      );
+    } catch {
+      toast.error('No se pudo buscar el usuario');
+    } finally {
+      setSearching(false);
+    }
   }
 
   return (
     <Card className="gap-2 py-4 shadow-none">
       <CardHeader className="px-4">
-        <CardTitle className="text-sm">Agregar a un viaje</CardTitle>
+        <CardTitle className="text-sm">Invitar a un viaje</CardTitle>
         <CardDescription>
-          Sumá a alguien por su email a uno de tus viajes activos.
+          Enviá una invitación por email a uno de tus viajes activos.
         </CardDescription>
       </CardHeader>
       <CardContent className="px-4">
@@ -119,15 +107,15 @@ export function SidebarAddTripForm() {
           />
           <Button
             type="submit"
-            disabled={mutation.isPending || activeTrips.length === 0}
+            disabled={busy || activeTrips.length === 0}
             className="w-full bg-sidebar-primary text-sidebar-primary-foreground shadow-none"
           >
-            {mutation.isPending ? (
+            {busy ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
-              <UserPlus className="size-4" />
+              <Send className="size-4" />
             )}
-            Agregar
+            Invitar
           </Button>
         </form>
       </CardContent>

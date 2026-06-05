@@ -10,31 +10,27 @@ import api from '@/lib/axios';
  * El backend guarda/actualiza al usuario en su base de datos cuando recibe
  * una petición autenticada (la ClerkJwtStrategy hace el upsert). Iniciar
  * sesión en Clerk NO toca el backend por sí solo, así que aquí disparamos
- * un GET /users/me una vez para forzar ese guardado.
+ * un GET /v1/users/me una vez para forzar ese guardado.
  *
- * Adjuntamos el token explícitamente (en vez de depender del interceptor de
- * axios) para evitar una carrera de orden de montaje con AuthTokenSync.
+ * La auth la resuelve el route handler del BFF server-side (cookie de Clerk),
+ * por eso ya no adjuntamos el token manualmente.
  */
 export function UserSync() {
-  const { isSignedIn, getToken } = useAuth();
+  const { isSignedIn } = useAuth();
   const synced = useRef(false);
 
   useEffect(() => {
     if (!isSignedIn || synced.current) return;
 
     void (async () => {
-      const token = await getToken();
-      if (!token) return;
       try {
-        await api.get('/users/me', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await api.get('/v1/users/me');
         synced.current = true;
       } catch {
         // Reintentará en el próximo render si falló (ej. backend caído).
       }
     })();
-  }, [isSignedIn, getToken]);
+  }, [isSignedIn]);
 
   return null;
 }

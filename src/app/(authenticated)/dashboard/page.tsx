@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { useQuery } from '@tanstack/react-query';
 import {
   Plane,
   Wallet,
@@ -12,8 +11,6 @@ import {
   Users,
   ChevronRight,
   Activity,
-  BarChart3,
-  Clock,
   DollarSign,
   UserRound,
 } from 'lucide-react';
@@ -22,38 +19,33 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TripStatusBadge } from '@/components/shared/ui-bits';
 import { TripFormDialog } from '@/components/trips/trip-form-dialog';
-import { getDashboard } from '@/lib/api/dashboard';
-import { listTrips } from '@/lib/api/trips';
+import { StaggerList, StaggerItem } from '@/components/motion/stagger';
+import { ActivityChartDrawer } from '@/components/dashboard/activity-chart-drawer';
+import { useDashboard } from '@/hooks/querys/dashboard/useDashboard';
+import {
+  useActivitySummary,
+  ACTIVITY_COLORS,
+  balanceColor,
+} from '@/hooks/use-activity-summary';
+import { useTrips } from '@/hooks/querys/trips/useTrips';
 
 export default function DashboardPage() {
   const { user } = useUser();
   const [newTripOpen, setNewTripOpen] = useState(false);
+  const [chartOpen, setChartOpen] = useState(false);
 
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: getDashboard,
-    staleTime: 60_000,
-  });
+  const { data: stats, isLoading: statsLoading } = useDashboard();
 
   // Reusa el mismo cache que /trips para poblar "Mis viajes" (solo lectura).
-  const { data: trips } = useQuery({
-    queryKey: ['trips'],
-    queryFn: listTrips,
-    staleTime: 60_000,
-  });
+  const { data: trips } = useTrips();
 
-  const totalBalance = parseFloat(stats?.balanceTotal ?? '0');
-  const balanceColor =
-    totalBalance > 0 ? 'text-success' : totalBalance < 0 ? 'text-destructive' : 'text-foreground';
-  const balanceLabel =
-    totalBalance === 0 ? 'Todo saldado' : totalBalance > 0 ? 'Te deben en general' : 'Debés en general';
-  const balanceText =
-    totalBalance === 0
-      ? '$0'
-      : `${totalBalance > 0 ? '+' : '−'}${Math.abs(totalBalance).toLocaleString('es-AR', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`;
+  // Resumen de actividad (gastos/pagos/balance) compartido con el gráfico.
+  const summary = useActivitySummary();
+  const fmtSigned = (n: number) =>
+    `${n < 0 ? '−' : '+'}${Math.abs(n).toLocaleString('es-AR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
 
   const hasTrips = !statsLoading && (stats?.totalTrips ?? 0) > 0;
 
@@ -76,69 +68,108 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="overflow-hidden">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="flex-row items-start justify-between gap-2 pb-1">
-            <p className="text-xs leading-tight text-muted-foreground">Viajes activos</p>
-            <div className="rounded-lg bg-primary/10 p-2 text-primary">
-              <Plane className="size-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            <p className="text-3xl font-bold tabular-nums">
-              {statsLoading ? '—' : (stats?.activeTrips ?? 0)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {stats?.totalTrips != null ? `${stats.totalTrips} en total` : 'Sin viajes aún'}
-            </p>
-          </CardContent>
-        </Card>
+      <StaggerList className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StaggerItem>
+          <Card
+            className="cursor-pointer overflow-hidden transition-colors hover:bg-muted/40"
+            onClick={() => setChartOpen(true)}
+          >
+            <div className="h-1 bg-primary" />
+            <CardHeader className="flex-row items-start justify-between gap-2 pb-1">
+              <p className="text-xs leading-tight text-muted-foreground">Viajes activos</p>
+              <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                <Plane className="size-4" />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              <p className="text-3xl font-bold tabular-nums">
+                {statsLoading ? '—' : (stats?.activeTrips ?? 0)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {stats?.totalTrips != null ? `${stats.totalTrips} en total` : 'Sin viajes aún'}
+              </p>
+            </CardContent>
+          </Card>
+        </StaggerItem>
 
-        <Card className="overflow-hidden">
-          <div className="h-1 bg-success" />
-          <CardHeader className="flex-row items-start justify-between gap-2 pb-1">
-            <p className="text-xs leading-tight text-muted-foreground">Balance total</p>
-            <div className="rounded-lg bg-success/10 p-2 text-success">
-              <Wallet className="size-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            <p className={`text-3xl font-bold tabular-nums ${balanceColor}`}>
-              {statsLoading ? '—' : balanceText}
-            </p>
-            <p className="text-xs text-muted-foreground">{balanceLabel}</p>
-          </CardContent>
-        </Card>
+        <StaggerItem>
+          <Card
+            className="cursor-pointer overflow-hidden transition-colors hover:bg-muted/40"
+            onClick={() => setChartOpen(true)}
+          >
+            <div className="h-1 bg-primary" />
+            <CardHeader className="flex-row items-start justify-between gap-2 pb-1">
+              <p className="text-xs leading-tight text-muted-foreground">Balance total</p>
+              <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                <Wallet className="size-4" />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              <p
+                className="text-3xl font-bold tabular-nums"
+                style={{ color: balanceColor(summary.balance) }}
+              >
+                {summary.isLoading ? '—' : fmtSigned(summary.balance)}
+              </p>
+              <p className="text-xs text-muted-foreground">Ingresos − egresos</p>
+            </CardContent>
+          </Card>
+        </StaggerItem>
 
-        <Card className="overflow-hidden">
-          <div className="h-1 bg-success" />
-          <CardHeader className="flex-row items-start justify-between gap-2 pb-1">
-            <p className="text-xs leading-tight text-muted-foreground">Total gastado</p>
-            <div className="rounded-lg bg-success/10 p-2 text-success">
-              <Receipt className="size-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            <p className="text-3xl font-bold tabular-nums">—</p>
-            <p className="text-xs text-muted-foreground">En todos tus viajes</p>
-          </CardContent>
-        </Card>
+        <StaggerItem>
+          <Card
+            className="cursor-pointer overflow-hidden transition-colors hover:bg-muted/40"
+            onClick={() => setChartOpen(true)}
+          >
+            <div className="h-1 bg-destructive" />
+            <CardHeader className="flex-row items-start justify-between gap-2 pb-1">
+              <p className="text-xs leading-tight text-muted-foreground">Total gastado</p>
+              <div className="rounded-lg bg-destructive/10 p-2 text-destructive">
+                <Receipt className="size-4" />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              <p
+                className="text-3xl font-bold tabular-nums"
+                style={{ color: ACTIVITY_COLORS.gastos }}
+              >
+                {summary.isLoading ? '—' : fmtSigned(-summary.totalGastos)}
+              </p>
+              <p className="text-xs text-muted-foreground">Egresos en tus viajes</p>
+            </CardContent>
+          </Card>
+        </StaggerItem>
 
-        <Card className="overflow-hidden">
-          <div className="h-1 bg-warning" />
-          <CardHeader className="flex-row items-start justify-between gap-2 pb-1">
-            <p className="text-xs leading-tight text-muted-foreground">Pagos pendientes</p>
-            <div className="rounded-lg bg-warning/10 p-2 text-warning">
-              <CreditCard className="size-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            <p className="text-3xl font-bold tabular-nums">—</p>
-            <p className="text-xs text-muted-foreground">Sugeridos por saldar</p>
-          </CardContent>
-        </Card>
-      </div>
+        <StaggerItem>
+          <Card
+            className="cursor-pointer overflow-hidden transition-colors hover:bg-muted/40"
+            onClick={() => setChartOpen(true)}
+          >
+            <div className="h-1" style={{ backgroundColor: ACTIVITY_COLORS.pagos }} />
+            <CardHeader className="flex-row items-start justify-between gap-2 pb-1">
+              <p className="text-xs leading-tight text-muted-foreground">Total en pagos</p>
+              <div
+                className="rounded-lg p-2"
+                style={{
+                  backgroundColor: 'color-mix(in oklab, var(--color-pagos, oklch(0.62 0.17 152)) 12%, transparent)',
+                  color: ACTIVITY_COLORS.pagos,
+                }}
+              >
+                <CreditCard className="size-4" />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              <p
+                className="text-3xl font-bold tabular-nums"
+                style={{ color: ACTIVITY_COLORS.pagos }}
+              >
+                {summary.isLoading ? '—' : fmtSigned(summary.totalPagos)}
+              </p>
+              <p className="text-xs text-muted-foreground">Ingresos registrados</p>
+            </CardContent>
+          </Card>
+        </StaggerItem>
+      </StaggerList>
 
       {/* Mis viajes */}
       {hasTrips ? (
@@ -306,6 +337,7 @@ export default function DashboardPage() {
       </div>
 
       <TripFormDialog open={newTripOpen} onOpenChange={setNewTripOpen} />
+      <ActivityChartDrawer open={chartOpen} onOpenChange={setChartOpen} />
     </div>
   );
 }

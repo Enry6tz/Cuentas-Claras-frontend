@@ -1,13 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, ArrowLeftRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PersonAvatar } from '@/components/shared/ui-bits';
-import { getSettlement } from '@/lib/api/balances';
+import { useSettlement } from '@/hooks/querys/balances/useSettlement';
 import { PaymentFormDialog } from '@/components/payments/payment-form-dialog';
-import { avatarColor, initials } from '@/lib/utils';
 import type { Participation } from '@/types';
 
 interface SettlementSuggestionsProps {
@@ -27,10 +25,7 @@ export function SettlementSuggestions({
     amount: string;
   } | null>(null);
 
-  const { data: settlement, isLoading } = useQuery({
-    queryKey: ['settlement', tripId],
-    queryFn: () => getSettlement(tripId),
-  });
+  const { data: settlement, isLoading } = useSettlement(tripId);
 
   if (isLoading) {
     return <p className="py-4 text-sm text-muted-foreground">Calculando liquidación...</p>;

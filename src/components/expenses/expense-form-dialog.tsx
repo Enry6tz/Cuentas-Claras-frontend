@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeftRight, Plus, X } from 'lucide-react';
 import {
@@ -26,9 +25,9 @@ import {
 } from '@/components/ui/select';
 import { PersonAvatar } from '@/components/shared/ui-bits';
 import { DatePicker } from '@/components/shared/date-picker';
-import { createExpense, type CreateExpensePayload } from '@/lib/api/expenses';
-import { getCurrencyRate } from '@/lib/api/currency';
-import type { Participation } from '@/types';
+import { useCurrencyRate } from '@/hooks/querys/currency/useCurrencyRate';
+import { useExpenseMutations } from '@/hooks/querys/expenses/useExpenseMutations';
+import type { CreateExpensePayload, Participation } from '@/types';
 
 function fmt(amount: number, currency: string) {
   return `${amount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
@@ -51,8 +50,6 @@ export function ExpenseFormDialog({
   participations,
   baseCurrency,
 }: ExpenseFormDialogProps) {
-  const queryClient = useQueryClient();
-
   const [description, setDescription] = useState('');
   const [originalAmount, setOriginalAmount] = useState('');
   const [originalCurrency, setOriginalCurrency] = useState(baseCurrency);
@@ -66,13 +63,10 @@ export function ExpenseFormDialog({
   const [exactShares, setExactShares] = useState<Array<{ userId: string; amountOwed: string }>>([]);
   const [percentShares, setPercentShares] = useState<Array<{ userId: string; percent: string }>>([]);
 
-  const { data: rateData, isLoading: rateLoading } = useQuery({
-    queryKey: ['currency-rate', originalCurrency, baseCurrency],
-    queryFn: () => getCurrencyRate(originalCurrency, baseCurrency),
-    enabled: originalCurrency !== baseCurrency,
-    staleTime: 60 * 60 * 1000,
-    retry: 1,
-  });
+  const { data: rateData, isLoading: rateLoading } = useCurrencyRate(
+    originalCurrency,
+    baseCurrency,
+  );
 
   const apiRate = rateData?.rate ?? null;
   const manualRateNum = manualRate ? parseFloat(manualRate) : null;
@@ -80,21 +74,7 @@ export function ExpenseFormDialog({
   const amountNum = parseFloat(originalAmount) || 0;
   const baseEquivalent = effectiveRate && amountNum ? Math.round(amountNum * effectiveRate * 100) / 100 : null;
 
-  const mutation = useMutation({
-    mutationFn: (payload: CreateExpensePayload) => createExpense(tripId, payload),
-    onSuccess: () => {
-      toast.success('Gasto creado');
-      queryClient.invalidateQueries({ queryKey: ['expenses', tripId] });
-      queryClient.invalidateQueries({ queryKey: ['balances', tripId] });
-      onOpenChange(false);
-    },
-    onError: (err: unknown) => {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? 'No se pudo crear el gasto';
-      toast.error(typeof message === 'string' ? message : 'Algo salio mal');
-    },
-  });
+  const { create: mutation } = useExpenseMutations(tripId);
 
   function handleAddPayer() {
     setPayers([...payers, { userId: '', amountPaid: '' }]);
@@ -226,7 +206,7 @@ export function ExpenseFormDialog({
       payload.percentShares = shares;
     }
 
-    mutation.mutate(payload);
+    mutation.mutate(payload, { onSuccess: () => onOpenChange(false) });
   }
 
   // Derivados para la fila de resumen del reparto.

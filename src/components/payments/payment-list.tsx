@@ -1,7 +1,5 @@
 'use client';
 
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import { Trash2, ArrowRight, CreditCard } from 'lucide-react';
 import {
   Table,
@@ -13,7 +11,8 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { PersonAvatar } from '@/components/shared/ui-bits';
-import { listPayments, deletePayment } from '@/lib/api/payments';
+import { usePayments } from '@/hooks/querys/payments/usePayments';
+import { usePaymentMutations } from '@/hooks/querys/payments/usePaymentMutations';
 import type { Payment } from '@/types';
 
 interface PaymentListProps {
@@ -37,22 +36,9 @@ export function PaymentList({
   isCreator,
   baseCurrency,
 }: PaymentListProps) {
-  const queryClient = useQueryClient();
+  const { data: payments, isLoading } = usePayments(tripId);
 
-  const { data: payments, isLoading } = useQuery({
-    queryKey: ['payments', tripId],
-    queryFn: () => listPayments(tripId),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deletePayment(tripId, id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payments', tripId] });
-      queryClient.invalidateQueries({ queryKey: ['balances', tripId] });
-      toast.success('Pago eliminado');
-    },
-    onError: () => toast.error('No se pudo eliminar el pago'),
-  });
+  const { remove: deleteMutation } = usePaymentMutations(tripId);
 
   const canDelete = (payment: Payment) => {
     if (isSupervisor) return false;

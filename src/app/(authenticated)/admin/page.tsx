@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/nextjs';
-import { toast } from 'sonner';
 import {
   Pencil,
   Trash2,
@@ -36,12 +34,15 @@ import {
 } from '@/components/ui/table';
 import { TripStatusBadge } from '@/components/shared/ui-bits';
 import { TripFormDialog } from '@/components/trips/trip-form-dialog';
-import { listAdminTrips, updateAdminTrip, deleteAdminTrip } from '@/lib/api/admin';
+import { useAdminTrips } from '@/hooks/querys/admin/useAdminTrips';
+import { useAdminTripMutations } from '@/hooks/querys/admin/useAdminTripMutations';
+import { updateAdminTrip } from '@/services/api/admin';
 import type { Trip } from '@/types';
+
+const ADMIN_TRIPS_KEY = [['admin', 'trips']];
 
 export default function AdminPage() {
   const { user } = useUser();
-  const queryClient = useQueryClient();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editTrip, setEditTrip] = useState<Trip | null>(null);
@@ -49,26 +50,9 @@ export default function AdminPage() {
 
   const isAdmin = user?.publicMetadata?.admin === true;
 
-  const { data: trips, isLoading, isError } = useQuery({
-    queryKey: ['admin', 'trips'],
-    queryFn: listAdminTrips,
-    enabled: isAdmin,
-  });
+  const { data: trips, isLoading, isError } = useAdminTrips({ enabled: isAdmin });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteAdminTrip(id),
-    onSuccess: () => {
-      toast.success('Viaje eliminado');
-      queryClient.invalidateQueries({ queryKey: ['admin', 'trips'] });
-      setDeleteTrip(null);
-    },
-    onError: (err: unknown) => {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? 'No se pudo eliminar el viaje';
-      toast.error(typeof message === 'string' ? message : 'Algo salió mal');
-    },
-  });
+  const { remove: deleteMutation } = useAdminTripMutations();
 
   const totals = useMemo(() => {
     const list = trips ?? [];
@@ -216,7 +200,11 @@ export default function AdminPage() {
         </CardContent>
       </Card>
 
-      <TripFormDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <TripFormDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        invalidateKeys={ADMIN_TRIPS_KEY}
+      />
 
       {editTrip && (
         <TripFormDialog
@@ -226,6 +214,7 @@ export default function AdminPage() {
           }}
           trip={editTrip}
           updateFn={updateAdminTrip}
+          invalidateKeys={ADMIN_TRIPS_KEY}
         />
       )}
 
@@ -249,7 +238,12 @@ export default function AdminPage() {
             <Button
               variant="destructive"
               disabled={deleteMutation.isPending}
-              onClick={() => deleteTrip && deleteMutation.mutate(deleteTrip.id)}
+              onClick={() =>
+                deleteTrip &&
+                deleteMutation.mutate(deleteTrip.id, {
+                  onSuccess: () => setDeleteTrip(null),
+                })
+              }
             >
               {deleteMutation.isPending ? 'Eliminando...' : 'Eliminar'}
             </Button>
