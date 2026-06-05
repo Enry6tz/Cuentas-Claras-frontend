@@ -19,11 +19,8 @@ import {
   Pencil,
   Trash2,
   Plus,
-  Receipt,
-  Trash2,
   User as UserIcon,
   UserPlus,
-  Users,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,6 +36,8 @@ import {
 } from '@/components/ui/dialog';
 import { TripStatusBadge } from '@/components/shared/ui-bits';
 import { TripFormDialog } from '@/components/trips/trip-form-dialog';
+import { ParticipantsList } from '@/components/trips/participants-list';
+import { AddParticipantDialog } from '@/components/trips/add-participant-dialog';
 import { ExpenseList } from '@/components/expenses/expense-list';
 import { ExpenseFormDialog } from '@/components/expenses/expense-form-dialog';
 import { PaymentList } from '@/components/payments/payment-list';
@@ -73,6 +72,7 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [expenseFormOpen, setExpenseFormOpen] = useState(false);
   const [paymentFormOpen, setPaymentFormOpen] = useState(false);
+  const [addParticipantOpen, setAddParticipantOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('participants');
   const { user: clerkUser } = useUser();
 
