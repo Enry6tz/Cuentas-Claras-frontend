@@ -34,17 +34,36 @@ export function statusCodeName(status: number): string {
 
 interface NestErrorBody {
   statusCode?: number;
+  // Backend nuevo: error es un objeto { code, message, details }.
+  // Backend viejo: error es un string corto ("Not Found") y el mensaje va en `message`.
   message?: string | string[];
-  error?: string;
+  error?: string | { code?: string; message?: string; details?: unknown };
 }
 
 /**
- * Normaliza el error que devuelve NestJS ({ statusCode, message, error }, donde
- * message puede ser string o array de errores de validación) al shape canónico
- * del BFF: { error: { code, message, details } }.
+ * Normaliza el error del backend al shape canónico del BFF:
+ *   { error: { code, message, details } }
+ *
+ * Soporta dos formatos del backend:
+ *  - Nuevo (Entregable 4): { error: { code, message, details } } -> se pasa tal cual.
+ *  - Viejo / fallback: { statusCode, message, error } donde `message` puede ser
+ *    string o array de errores de validación.
  */
 export function normalizeBackendError(body: unknown, status: number) {
   const b = (body ?? {}) as NestErrorBody;
+
+  // Caso ya-canónico: el backend nuevo manda error como objeto con code/message.
+  if (b.error && typeof b.error === 'object') {
+    return {
+      error: {
+        code: b.error.code ?? statusCodeName(status),
+        message: b.error.message ?? 'Error inesperado',
+        details: b.error.details,
+      },
+    };
+  }
+
+  // Fallback al formato viejo de NestJS ({ statusCode, message, error }).
   const rawMsg = b.message;
   const message = Array.isArray(rawMsg)
     ? rawMsg.join(', ')
