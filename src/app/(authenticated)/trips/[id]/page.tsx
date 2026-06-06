@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, use, useMemo } from 'react';
+import { useState, use } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useUser } from '@clerk/nextjs';
 import {
   ArrowLeft,
   Calendar,
@@ -86,20 +85,13 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
         ? 'payments'
         : (tabParam ?? 'participants'),
   );
-  const { user: clerkUser } = useUser();
-
   const { data: trip, isLoading, isError } = useTrip(id);
 
   const { data: currentUser } = useMe();
 
   const { remove } = useTripMutations();
 
-  const currentUserId = useMemo(() => {
-    const clerkEmail = clerkUser?.primaryEmailAddress?.emailAddress;
-    if (!clerkEmail || !trip?.participations) return '';
-    const match = trip.participations.find((p) => p.user?.email === clerkEmail);
-    return match?.userId ?? '';
-  }, [clerkUser, trip]);
+  const currentUserId = currentUser?.id ?? '';
 
   if (isLoading) {
     return (
