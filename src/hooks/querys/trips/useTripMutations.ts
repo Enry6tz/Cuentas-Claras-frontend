@@ -1,7 +1,7 @@
 'use client';
 
 import { useApiMutation } from '@/hooks/querys/common/useApiMutation';
-import { createTrip, updateTrip, deleteTrip } from '@/services/api/trips';
+import { createTrip, updateTrip, deleteTrip, finalizeTrip } from '@/services/api/trips';
 import type { TripPayload, UpdateTripPayload } from '@/types';
 
 export function useTripMutations() {
@@ -23,6 +23,12 @@ export function useTripMutations() {
       mutationFn: (id: string) => deleteTrip(id),
       invalidateKeys: [['trips']],
       successMessage: 'Viaje eliminado',
+    }),
+
+    finalize: useApiMutation({
+      mutationFn: (id: string) => finalizeTrip(id),
+      invalidateKeys: [['trips']],
+      successMessage: 'Viaje finalizado',
     }),
   };
 }

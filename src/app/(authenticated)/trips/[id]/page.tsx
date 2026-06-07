@@ -14,6 +14,7 @@ import {
   Pencil,
   Trash2,
   Plus,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   Card,
@@ -76,6 +77,7 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [expenseFormOpen, setExpenseFormOpen] = useState(nuevo === 'gasto');
   const [paymentFormOpen, setPaymentFormOpen] = useState(nuevo === 'pago');
   const [activeTab, setActiveTab] = useState(
@@ -89,7 +91,7 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
 
   const { data: currentUser } = useMe();
 
-  const { remove } = useTripMutations();
+  const { remove, finalize } = useTripMutations();
 
   const currentUserId = currentUser?.id ?? '';
 
@@ -144,6 +146,16 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
 
         {isCreator && (
           <div className="absolute right-3 top-3 z-20 flex gap-2">
+            {trip.status === 'ACTIVE' && (!trip.endDate || new Date(trip.endDate) > new Date()) && (
+              <Button
+                size="sm"
+                onClick={() => setFinalizeOpen(true)}
+                className="border-0 bg-white/15 text-white backdrop-blur hover:bg-emerald-500/70"
+              >
+                <CheckCircle2 className="size-4" />
+                Finalizar
+              </Button>
+            )}
             <Button
               size="sm"
               onClick={() => setEditOpen(true)}
@@ -266,7 +278,7 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
                   {expenseCount} {expenseCount === 1 ? 'gasto registrado' : 'gastos registrados'}
                 </p>
               </div>
-              {!isSupervisor && (
+              {!isSupervisor && trip.status === 'ACTIVE' && (
                 <CardAction>
                   <Button size="sm" onClick={() => setExpenseFormOpen(true)}>
                     <Plus className="size-4" />
@@ -368,6 +380,41 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
         participations={trip.participations ?? []}
         baseCurrency={trip.baseCurrency}
       />
+
+      <Dialog open={finalizeOpen} onOpenChange={setFinalizeOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Finalizar viaje</DialogTitle>
+            <DialogDescription>
+              Estás por finalizar el viaje <strong>{trip.name}</strong> antes de su fecha de finalización.
+              Todos los balances deben estar en <strong>0</strong> (saldados) para poder hacerlo.
+              Una vez finalizado no se podrán agregar más gastos, y solo se permitirán pagos
+              para saldar deudas pendientes.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setFinalizeOpen(false)}
+              disabled={finalize.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() =>
+                finalize.mutate(id, {
+                  onSuccess: () => {
+                    setFinalizeOpen(false);
+                  },
+                })
+              }
+              disabled={finalize.isPending}
+            >
+              {finalize.isPending ? 'Finalizando...' : 'Finalizar viaje'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-md">
