@@ -34,3 +34,8 @@ export async function updateTrip(
 export async function deleteTrip(id: string): Promise<void> {
   await api.delete(`/v1/trips/${id}`);
 }
+
+export async function finalizeTrip(id: string): Promise<Trip> {
+  const res = await api.post<Trip>(`/v1/trips/${id}/finalize`);
+  return res.data;
+}
