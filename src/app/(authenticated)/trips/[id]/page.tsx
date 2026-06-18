@@ -244,7 +244,6 @@ export default function TripDetailPage({ params }: TripDetailPageProps) {
           <TabsTrigger value="expenses">
             <Receipt className="size-4" />
             Gastos
-            <TabCount active={activeTab === 'expenses'}>{expenseCount}</TabCount>
           </TabsTrigger>
           <TabsTrigger value="payments">
             <CreditCard className="size-4" />

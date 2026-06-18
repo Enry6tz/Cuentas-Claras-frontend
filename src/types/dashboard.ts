@@ -11,5 +11,7 @@ export interface DashboardData {
   activeTrips: number;
   totalTrips: number;
   balanceTotal: string;
+  totalGastado: string;
+  totalEnPagos: string;
   recentActivity: ActivityItem[];
 }

@@ -22,11 +22,7 @@ import { TripFormDialog } from '@/components/trips/trip-form-dialog';
 import { StaggerList, StaggerItem } from '@/components/motion/stagger';
 import { ActivityChartDrawer } from '@/components/dashboard/activity-chart-drawer';
 import { useDashboard } from '@/hooks/querys/dashboard/useDashboard';
-import {
-  useActivitySummary,
-  ACTIVITY_COLORS,
-  balanceColor,
-} from '@/hooks/use-activity-summary';
+import { ACTIVITY_COLORS, balanceColor } from '@/hooks/use-activity-summary';
 import { useTrips } from '@/hooks/querys/trips/useTrips';
 
 export default function DashboardPage() {
@@ -39,13 +35,15 @@ export default function DashboardPage() {
   // Reusa el mismo cache que /trips para poblar "Mis viajes" (solo lectura).
   const { data: trips } = useTrips();
 
-  // Resumen de actividad (gastos/pagos/balance) compartido con el gráfico.
-  const summary = useActivitySummary();
   const fmtSigned = (n: number) =>
     `${n < 0 ? '−' : '+'}${Math.abs(n).toLocaleString('es-AR', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
+
+  const backendBalanceTotal = stats ? parseFloat(stats.balanceTotal) : 0;
+  const backendTotalGastado = stats ? parseFloat(stats.totalGastado) : 0;
+  const backendTotalEnPagos = stats ? parseFloat(stats.totalEnPagos) : 0;
 
   const hasTrips = !statsLoading && (stats?.totalTrips ?? 0) > 0;
 
@@ -107,11 +105,11 @@ export default function DashboardPage() {
             <CardContent className="space-y-1">
               <p
                 className="text-3xl font-bold tabular-nums"
-                style={{ color: balanceColor(summary.balance) }}
+                style={{ color: balanceColor(backendBalanceTotal) }}
               >
-                {summary.isLoading ? '—' : fmtSigned(summary.balance)}
+                {statsLoading ? '—' : fmtSigned(backendBalanceTotal)}
               </p>
-              <p className="text-xs text-muted-foreground">Ingresos − egresos</p>
+              <p className="text-xs text-muted-foreground">Balance neto en tus viajes</p>
             </CardContent>
           </Card>
         </StaggerItem>
@@ -133,9 +131,9 @@ export default function DashboardPage() {
                 className="text-3xl font-bold tabular-nums"
                 style={{ color: ACTIVITY_COLORS.gastos }}
               >
-                {summary.isLoading ? '—' : fmtSigned(-summary.totalGastos)}
+                {statsLoading ? '—' : fmtSigned(-backendTotalGastado)}
               </p>
-              <p className="text-xs text-muted-foreground">Egresos en tus viajes</p>
+              <p className="text-xs text-muted-foreground">Pagado de tu bolsillo</p>
             </CardContent>
           </Card>
         </StaggerItem>
@@ -147,7 +145,7 @@ export default function DashboardPage() {
           >
             <div className="h-1" style={{ backgroundColor: ACTIVITY_COLORS.pagos }} />
             <CardHeader className="flex-row items-start justify-between gap-2 pb-1">
-              <p className="text-xs leading-tight text-muted-foreground">Total en pagos</p>
+              <p className="text-xs leading-tight text-muted-foreground">Recibido de otros</p>
               <div
                 className="rounded-lg p-2"
                 style={{
@@ -163,9 +161,9 @@ export default function DashboardPage() {
                 className="text-3xl font-bold tabular-nums"
                 style={{ color: ACTIVITY_COLORS.pagos }}
               >
-                {summary.isLoading ? '—' : fmtSigned(summary.totalPagos)}
+                {statsLoading ? '—' : fmtSigned(backendTotalEnPagos)}
               </p>
-              <p className="text-xs text-muted-foreground">Ingresos registrados</p>
+              <p className="text-xs text-muted-foreground">Te pagaron para saldar deudas</p>
             </CardContent>
           </Card>
         </StaggerItem>
